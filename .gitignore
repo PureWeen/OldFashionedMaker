@@ -1,0 +1,11 @@
+## .NET
+bin/
+obj/
+
+## User-specific files
+*.user
+*.suo
+*.userprefs
+
+## macOS
+.DS_Store

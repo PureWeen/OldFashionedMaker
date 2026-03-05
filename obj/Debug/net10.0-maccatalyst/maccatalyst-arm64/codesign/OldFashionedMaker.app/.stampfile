@@ -1,1 +1,0 @@
--v --force --timestamp=none --sign - --entitlements /Users/shneuvil/Projects/OldFashionedMaker/obj/Debug/net10.0-maccatalyst/maccatalyst-arm64/Entitlements.xcent /Users/shneuvil/Projects/OldFashionedMaker/bin/Debug/net10.0-maccatalyst/maccatalyst-arm64/OldFashionedMaker.app

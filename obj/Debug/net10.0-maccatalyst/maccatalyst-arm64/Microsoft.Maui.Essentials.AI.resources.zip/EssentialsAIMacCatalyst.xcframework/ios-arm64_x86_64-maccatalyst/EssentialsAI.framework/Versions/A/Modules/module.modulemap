@@ -1,4 +1,0 @@
-framework module EssentialsAI {
-  header "EssentialsAI-Swift.h"
-  requires objc
-}
