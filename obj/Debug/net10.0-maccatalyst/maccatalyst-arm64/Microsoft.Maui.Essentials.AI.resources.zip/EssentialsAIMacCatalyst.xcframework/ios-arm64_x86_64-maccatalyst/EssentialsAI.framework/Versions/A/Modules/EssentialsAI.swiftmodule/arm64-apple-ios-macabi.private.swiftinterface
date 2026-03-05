@@ -1,0 +1,139 @@
+// swift-interface-format-version: 1.0
+// swift-compiler-version: Apple Swift version 6.2 effective-5.10 (swiftlang-6.2.0.19.9 clang-1700.3.19.1)
+// swift-module-flags: -target arm64-apple-ios26.0-macabi -enable-objc-interop -enable-library-evolution -swift-version 5 -enforce-exclusivity=checked -O -enable-upcoming-feature DisableOutwardActorInference -enable-upcoming-feature InferSendableFromCaptures -enable-upcoming-feature GlobalActorIsolatedTypesUsability -enable-upcoming-feature MemberImportVisibility -enable-upcoming-feature InferIsolatedConformances -enable-upcoming-feature NonisolatedNonsendingByDefault -enable-experimental-feature DebugDescriptionMacro -enable-bare-slash-regex -module-name EssentialsAI
+// swift-module-flags-ignorable: -no-verify-emitted-module-interface -formal-cxx-interoperability-mode=off -interface-compiler-version 6.2
+import Foundation
+import FoundationModels
+import Swift
+import _Concurrency
+import _StringProcessing
+import _SwiftConcurrencyShims
+@objc(ChatRoleNative) public enum ChatRoleNative : Swift.Int {
+  case user = 1
+  case assistant = 2
+  case system = 3
+  case tool = 4
+  #if compiler(>=5.3) && $NonescapableTypes
+  public init?(rawValue: Swift.Int)
+  #endif
+  public typealias RawValue = Swift.Int
+  public var rawValue: Swift.Int {
+    get
+  }
+}
+@_inheritsConvenienceInitializers @objc(ChatMessageNative) public class ChatMessageNative : ObjectiveC.NSObject {
+  @objc public var role: EssentialsAI.ChatRoleNative
+  @objc public var contents: [EssentialsAI.AIContentNative]
+  @objc override dynamic public init()
+  @objc deinit
+}
+@_inheritsConvenienceInitializers @objc(ChatOptionsNative) public class ChatOptionsNative : ObjectiveC.NSObject {
+  @objc public var topK: Foundation.NSNumber?
+  @objc public var seed: Foundation.NSNumber?
+  @objc public var temperature: Foundation.NSNumber?
+  @objc public var maxOutputTokens: Foundation.NSNumber?
+  @objc public var responseJsonSchema: Foundation.NSString?
+  @objc public var tools: [any EssentialsAI.AIToolNative]?
+  @objc override dynamic public init()
+  @objc deinit
+}
+@_inheritsConvenienceInitializers @objc(AIContentNative) public class AIContentNative : ObjectiveC.NSObject {
+  @objc override dynamic public init()
+  @objc deinit
+}
+@objc(TextContentNative) public class TextContentNative : EssentialsAI.AIContentNative {
+  @objc public init(text: Swift.String)
+  @objc public var text: Swift.String
+  @objc deinit
+}
+@objc(FunctionCallContentNative) public class FunctionCallContentNative : EssentialsAI.AIContentNative {
+  @objc public var callId: Swift.String
+  @objc public var name: Swift.String
+  @objc public var arguments: Swift.String
+  @objc public init(callId: Swift.String, name: Swift.String, arguments: Swift.String)
+  @objc deinit
+}
+@objc(FunctionResultContentNative) public class FunctionResultContentNative : EssentialsAI.AIContentNative {
+  @objc public var callId: Swift.String
+  @objc public var name: Swift.String
+  @objc public var result: Swift.String
+  @objc public init(callId: Swift.String, name: Swift.String, result: Swift.String)
+  @objc deinit
+}
+@objc(ChatResponseNative) public class ChatResponseNative : ObjectiveC.NSObject, @unchecked Swift.Sendable {
+  @objc public var messages: [EssentialsAI.ChatMessageNative]
+  @objc public init(messages: [EssentialsAI.ChatMessageNative])
+  @objc deinit
+}
+@objc(ChatClientError) public enum ChatClientError : Swift.Int {
+  case emptyMessages = 1
+  case invalidRole = 2
+  case invalidContent = 3
+  case cancelled = 4
+  #if compiler(>=5.3) && $NonescapableTypes
+  public init?(rawValue: Swift.Int)
+  #endif
+  public typealias RawValue = Swift.Int
+  public var rawValue: Swift.Int {
+    get
+  }
+}
+@_inheritsConvenienceInitializers @objc(ChatClientNative) public class ChatClientNative : ObjectiveC.NSObject {
+  #if compiler(>=5.3) && $NonescapableTypes
+  @objc public func streamResponse(messages: [EssentialsAI.ChatMessageNative], options: EssentialsAI.ChatOptionsNative?, onUpdate: @escaping (EssentialsAI.ResponseUpdateNative) -> Swift.Void, onComplete: @escaping (EssentialsAI.ChatResponseNative?, Foundation.NSError?) -> Swift.Void) -> EssentialsAI.CancellationTokenNative?
+  #endif
+  #if compiler(>=5.3) && $NonescapableTypes
+  @objc public func getResponse(messages: [EssentialsAI.ChatMessageNative], options: EssentialsAI.ChatOptionsNative?, onUpdate: @escaping (EssentialsAI.ResponseUpdateNative) -> Swift.Void, onComplete: @escaping (EssentialsAI.ChatResponseNative?, Foundation.NSError?) -> Swift.Void) -> EssentialsAI.CancellationTokenNative?
+  #endif
+  @objc override dynamic public init()
+  @objc deinit
+}
+@objc(ResponseUpdateTypeNative) public enum ResponseUpdateTypeNative : Swift.Int, Swift.Sendable {
+  case content = 0
+  case toolCall = 1
+  case toolResult = 2
+  #if compiler(>=5.3) && $NonescapableTypes
+  public init?(rawValue: Swift.Int)
+  #endif
+  public typealias RawValue = Swift.Int
+  public var rawValue: Swift.Int {
+    get
+  }
+}
+@objc(ResponseUpdateNative) final public class ResponseUpdateNative : ObjectiveC.NSObject, Swift.Sendable {
+  @objc final public let updateType: EssentialsAI.ResponseUpdateTypeNative
+  @objc final public let text: Swift.String?
+  @objc final public let toolCallId: Swift.String?
+  @objc final public let toolCallName: Swift.String?
+  @objc final public let toolCallArguments: Swift.String?
+  @objc final public let toolCallResult: Swift.String?
+  #if compiler(>=5.3) && $NonescapableTypes
+  @objc public init(updateType: EssentialsAI.ResponseUpdateTypeNative = .content, text: Swift.String? = nil, toolCallId: Swift.String? = nil, toolCallName: Swift.String? = nil, toolCallArguments: Swift.String? = nil, toolCallResult: Swift.String? = nil)
+  #endif
+  @objc deinit
+}
+@_hasMissingDesignatedInitializers @objc(CancellationTokenNative) public class CancellationTokenNative : ObjectiveC.NSObject {
+  @objc public func cancel()
+  @objc public var isCancelled: Swift.Bool {
+    @objc get
+  }
+  @objc deinit
+}
+@objc(AIToolNative) public protocol AIToolNative : Swift.Sendable {
+  @objc var name: Swift.String { get }
+  @objc var desc: Swift.String { get }
+  @objc var argumentsSchema: Swift.String { get }
+  @objc var outputSchema: Swift.String { get }
+  #if compiler(>=5.3) && $AsyncExecutionBehaviorAttributes
+  @objc nonisolated(nonsending) func call(arguments: Swift.String) async throws -> Swift.String
+  #endif
+}
+extension EssentialsAI.ChatRoleNative : Swift.Equatable {}
+extension EssentialsAI.ChatRoleNative : Swift.Hashable {}
+extension EssentialsAI.ChatRoleNative : Swift.RawRepresentable {}
+extension EssentialsAI.ChatClientError : Swift.Equatable {}
+extension EssentialsAI.ChatClientError : Swift.Hashable {}
+extension EssentialsAI.ChatClientError : Swift.RawRepresentable {}
+extension EssentialsAI.ResponseUpdateTypeNative : Swift.Equatable {}
+extension EssentialsAI.ResponseUpdateTypeNative : Swift.Hashable {}
+extension EssentialsAI.ResponseUpdateTypeNative : Swift.RawRepresentable {}
