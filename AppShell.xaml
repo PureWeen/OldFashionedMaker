@@ -5,17 +5,13 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
     xmlns:pages="clr-namespace:OldFashionedMaker.Pages"
     Title="Old Fashioned Maker"
-    Shell.TabBarBackgroundColor="#2C1810"
-    Shell.TabBarTitleColor="#D4A574"
-    Shell.TabBarUnselectedColor="#8B7355">
+    Shell.BackgroundColor="#2C1810"
+    Shell.ForegroundColor="#D4A574"
+    Shell.TitleColor="#D4A574"
+    FlyoutBehavior="Disabled">
 
-    <TabBar>
-        <ShellContent Title="Log" Icon="drink_log" Route="log"
-                      ContentTemplate="{DataTemplate pages:LogDrinkPage}" />
-        <ShellContent Title="History" Icon="drink_history" Route="history"
-                      ContentTemplate="{DataTemplate pages:HistoryPage}" />
-        <ShellContent Title="Search" Icon="drink_search" Route="search"
-                      ContentTemplate="{DataTemplate pages:SearchPage}" />
-    </TabBar>
+    <ShellContent
+        ContentTemplate="{DataTemplate pages:ChatPage}"
+        Route="chat" />
 
 </Shell>

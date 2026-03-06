@@ -35,13 +35,22 @@ public static class MauiProgram
 		}
 #endif
 
-		builder.Services.AddSingleton(new DrinkAIService(chatClient, embeddingGenerator));
+		// Register embedding generator for tools
+		if (embeddingGenerator is not null)
+			builder.Services.AddSingleton(embeddingGenerator);
+
+		// Bartender tools (AI-callable functions)
+		builder.Services.AddSingleton(sp => new BartenderTools(
+			sp.GetRequiredService<DrinkService>(),
+			embeddingGenerator));
+
+		// Chat orchestrator (manages conversation + function calling pipeline)
+		builder.Services.AddSingleton(sp => new ChatOrchestrator(
+			chatClient,
+			sp.GetRequiredService<BartenderTools>()));
 
 		// Pages
-		builder.Services.AddTransient<LogDrinkPage>();
-		builder.Services.AddTransient<HistoryPage>();
-		builder.Services.AddTransient<DrinkDetailPage>();
-		builder.Services.AddTransient<SearchPage>();
+		builder.Services.AddTransient<ChatPage>();
 
 #if DEBUG
 		builder.Logging.AddDebug();
