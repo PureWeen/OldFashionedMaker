@@ -20,6 +20,14 @@ public class AppleSpeechService : ISpeechService
 
     public async Task<string?> ListenAsync(CancellationToken cancellationToken = default)
     {
+        // Must request microphone access before touching AVAudioEngine
+        var micStatus = await RequestMicrophoneAuthorizationAsync();
+        if (!micStatus)
+        {
+            Console.WriteLine("[Speech] Microphone authorization denied");
+            return null;
+        }
+
         var authStatus = await RequestSpeechAuthorizationAsync();
         if (authStatus != SFSpeechRecognizerAuthorizationStatus.Authorized)
         {
@@ -31,6 +39,21 @@ public class AppleSpeechService : ISpeechService
         if (!_recognizer.Available)
         {
             Console.WriteLine("[Speech] Recognizer not available");
+            return null;
+        }
+
+        // Configure audio session before using the engine
+        var audioSession = AVAudioSession.SharedInstance();
+        audioSession.SetCategory(AVAudioSessionCategory.Record, AVAudioSessionCategoryOptions.DefaultToSpeaker, out var catError);
+        if (catError != null)
+        {
+            Console.WriteLine($"[Speech] Audio session category error: {catError.LocalizedDescription}");
+            return null;
+        }
+        audioSession.SetActive(true, out var actError);
+        if (actError != null)
+        {
+            Console.WriteLine($"[Speech] Audio session activation error: {actError.LocalizedDescription}");
             return null;
         }
 
@@ -170,6 +193,13 @@ public class AppleSpeechService : ISpeechService
     {
         var tcs = new TaskCompletionSource<SFSpeechRecognizerAuthorizationStatus>();
         SFSpeechRecognizer.RequestAuthorization(status => tcs.TrySetResult(status));
+        return tcs.Task;
+    }
+
+    private static Task<bool> RequestMicrophoneAuthorizationAsync()
+    {
+        var tcs = new TaskCompletionSource<bool>();
+        AVCaptureDevice.RequestAccessForMediaType(AVAuthorizationMediaType.Audio, granted => tcs.TrySetResult(granted));
         return tcs.Task;
     }
 }

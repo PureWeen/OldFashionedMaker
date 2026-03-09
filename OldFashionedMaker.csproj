@@ -82,5 +82,9 @@
 		<PackageReference Include="Redth.MauiDevFlow.Agent" Version="0.20.0" />
 		<PackageReference Include="System.Numerics.Tensors" Version="10.0.3" />
 	</ItemGroup>
+	<!-- Inject privacy usage descriptions into the built Info.plist -->
+	<ItemGroup Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'maccatalyst' Or $([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'ios'">
+		<PartialAppManifest Include="Platforms\MacCatalyst\PrivacyInfo.plist" />
+	</ItemGroup>
 
 </Project>

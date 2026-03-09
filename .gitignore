@@ -9,3 +9,4 @@ obj/
 
 ## macOS
 .DS_Store
+msbuild.binlog

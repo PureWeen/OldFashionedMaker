@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Old Fashioned Maker uses the microphone for hands-free voice chat while you mix drinks.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Old Fashioned Maker uses speech recognition to understand your voice commands.</string>
+</dict>
+</plist>
