@@ -11,6 +11,8 @@ public partial class ChatPage : ContentPage
     private bool _isSending;
     private bool _voiceMode;
     private CancellationTokenSource? _listenCts;
+    private CancellationTokenSource? _silenceCts;
+    private string? _lastPartial;
 
     public ChatPage(ChatOrchestrator orchestrator, DrinkService drinkService, ISpeechService? speechService = null)
     {
@@ -70,26 +72,66 @@ public partial class ChatPage : ContentPage
         try
         {
             var result = await _speechService.ListenAsync(
-                onPartialResult: partial => MessageEntry.Text = partial,
+                onPartialResult: OnSpeechPartial,
                 cancellationToken: _listenCts.Token);
 
-            MicButton.Text = "🎙️";
-            MicButton.BackgroundColor = Color.FromArgb("#4A3228");
-            MessageEntry.Placeholder = "Ask your bartender...";
+            _silenceCts?.Cancel();
+            StopVoiceUI();
 
             if (!string.IsNullOrWhiteSpace(result))
             {
-                MessageEntry.Text = result;
-                OnSendClicked(this, EventArgs.Empty);
+                // Strip trailing "send" command if present
+                var text = StripSendCommand(result);
+                if (!string.IsNullOrWhiteSpace(text))
+                {
+                    MessageEntry.Text = text;
+                    OnSendClicked(this, EventArgs.Empty);
+                }
             }
         }
         catch (Exception ex)
         {
             Console.WriteLine($"[Speech] Listen error: {ex.Message}");
-            MicButton.Text = "🎙️";
-            MicButton.BackgroundColor = Color.FromArgb("#4A3228");
-            MessageEntry.Placeholder = "Ask your bartender...";
+            _silenceCts?.Cancel();
+            StopVoiceUI();
         }
+    }
+
+    private void OnSpeechPartial(string partial)
+    {
+        MessageEntry.Text = partial;
+        _lastPartial = partial;
+
+        // "Send" spoken — stop listening and send immediately
+        if (partial.TrimEnd().EndsWith("send", StringComparison.OrdinalIgnoreCase))
+        {
+            _listenCts?.Cancel();
+            return;
+        }
+
+        // Reset 3-second silence timer on every new partial
+        _silenceCts?.Cancel();
+        _silenceCts = new CancellationTokenSource();
+        var token = _silenceCts.Token;
+        _ = Task.Delay(TimeSpan.FromSeconds(3), token).ContinueWith(_ =>
+        {
+            MainThread.BeginInvokeOnMainThread(() => _listenCts?.Cancel());
+        }, TaskContinuationOptions.OnlyOnRanToCompletion);
+    }
+
+    private void StopVoiceUI()
+    {
+        MicButton.Text = "🎙️";
+        MicButton.BackgroundColor = Color.FromArgb("#4A3228");
+        MessageEntry.Placeholder = "Ask your bartender...";
+    }
+
+    private static string StripSendCommand(string text)
+    {
+        var trimmed = text.TrimEnd();
+        if (trimmed.EndsWith("send", StringComparison.OrdinalIgnoreCase))
+            return trimmed[..^4].TrimEnd();
+        return trimmed;
     }
 
     private void OnSendClicked(object? sender, EventArgs e)
