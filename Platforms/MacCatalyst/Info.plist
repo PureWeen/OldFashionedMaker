@@ -36,5 +36,9 @@
 	</array>
 	<key>XSAppIconAssets</key>
 	<string>Assets.xcassets/appicon.appiconset</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Old Fashioned Maker uses the microphone for hands-free voice chat while you mix drinks.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Old Fashioned Maker uses speech recognition to understand your voice commands.</string>
 </dict>
 </plist>

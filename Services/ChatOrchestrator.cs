@@ -30,20 +30,20 @@ public class ChatOrchestrator
 
         _isAvailable = true;
 
-        // System prompt
+        // System prompt — explicit about tool usage so the on-device model reliably calls them
         _history.Add(new ChatMessage(ChatRole.System, """
-            You are an expert Old Fashioned cocktail bartender and advisor. You help the user:
-            - Log new drinks they've made (ask for details and use the SaveDrink tool)
-            - Review their drink history (use GetHistory tool)
-            - Search for drinks by flavor (use SearchDrinks tool)
-            - Get stats about their preferences (use GetStats tool)
-            - Give advice on improving their drinks based on their history
-            
-            Be friendly, knowledgeable, and concise. Use cocktail terminology naturally.
-            When the user describes a drink they made, use SaveDrink to log it.
-            When they ask about past drinks, use GetHistory or SearchDrinks.
-            Always reference their actual data when giving advice.
-            Use emoji sparingly but naturally. Keep responses conversational and brief.
+            You are an Old Fashioned cocktail bartender assistant with access to tools.
+            You MUST use your tools to fulfill user requests. You CAN save, search, and retrieve drinks.
+
+            Available tools and WHEN to use them:
+            - SaveDrink: Use when the user describes a drink they made, wants to save/log a recipe, or says "save this". Fill in any details they mention; use sensible defaults for the rest.
+            - GetHistory: Use when the user asks about past drinks, recent drinks, or their drink log.
+            - SearchDrinks: Use when the user asks to find drinks by flavor or taste description.
+            - GetStats: Use when the user asks about their preferences, stats, or patterns.
+
+            IMPORTANT: Never say you "can't" save or modify drinks. You have tools that do exactly that.
+            When in doubt, USE the tool rather than explaining that you can't help.
+            Be friendly, concise, and use cocktail terminology naturally.
             """));
 
         // Register tools
@@ -61,46 +61,33 @@ public class ChatOrchestrator
     public ChatOptions? ChatOptions { get; }
 
     /// <summary>
-    /// Send a message and stream the response back token-by-token.
-    /// </summary>
-    public async IAsyncEnumerable<string> SendMessageStreamingAsync(string userMessage)
-    {
-        if (_client is null)
-        {
-            yield return "AI is not available on this device. Apple Intelligence requires iOS/macOS 26+.";
-            yield break;
-        }
-
-        _history.Add(new ChatMessage(ChatRole.User, userMessage));
-
-        System.Diagnostics.Debug.WriteLine($"[Bartender] Sending: {userMessage} (history: {_history.Count} msgs, tools: {ChatOptions?.Tools?.Count ?? 0})");
-
-        var updates = new List<ChatResponseUpdate>();
-
-        await foreach (var update in _client.GetStreamingResponseAsync(_history, ChatOptions))
-        {
-            updates.Add(update);
-            System.Diagnostics.Debug.WriteLine($"[Bartender] Token: '{update.Text}'");
-            if (!string.IsNullOrEmpty(update.Text))
-                yield return update.Text;
-        }
-
-        System.Diagnostics.Debug.WriteLine($"[Bartender] Done. {updates.Count} updates.");
-        _history.AddMessages(updates);
-    }
-
-    /// <summary>
     /// Send a message and get the complete response.
     /// </summary>
-    public async Task<string> SendMessageAsync(string userMessage)
+    public async Task<string> SendMessageAsync(string userMessage, CancellationToken cancellationToken = default)
     {
         if (_client is null)
-            return "AI is not available on this device. Apple Intelligence requires iOS/macOS 26+.";
+            return "AI is not available on this device.";
 
         _history.Add(new ChatMessage(ChatRole.User, userMessage));
 
-        var response = await _client.GetResponseAsync(_history, ChatOptions);
+        Console.WriteLine($"[Chat] Sending: {userMessage}");
+        Console.WriteLine($"[Chat] History length: {_history.Count}, Tools: {ChatOptions?.Tools?.Count ?? 0}");
+
+        var response = await _client.GetResponseAsync(_history, ChatOptions, cancellationToken);
+
+        // Log tool usage for debugging
+        foreach (var msg in response.Messages)
+        {
+            if (msg.Role == ChatRole.Assistant && msg.Contents.OfType<FunctionCallContent>().Any())
+            {
+                foreach (var fc in msg.Contents.OfType<FunctionCallContent>())
+                    Console.WriteLine($"[Chat] Tool called: {fc.Name}({string.Join(", ", fc.Arguments?.Select(kv => $"{kv.Key}={kv.Value}") ?? [])})");
+            }
+        }
+
         _history.AddMessages(response);
+
+        Console.WriteLine($"[Chat] Response: {response.Text?[..Math.Min(response.Text?.Length ?? 0, 100)]}...");
 
         return response.Text ?? "I didn't get a response. Please try again.";
     }

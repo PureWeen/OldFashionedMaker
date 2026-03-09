@@ -66,11 +66,20 @@
 		<MauiAsset Include="Resources\Raw\**" LogicalName="%(RecursiveDir)%(Filename)%(Extension)" />
 	</ItemGroup>
 
+	<!-- Exclude TestHarness from compilation -->
+	<ItemGroup>
+		<Compile Remove="TestHarness\**" />
+		<None Remove="TestHarness\**" />
+		<Content Remove="TestHarness\**" />
+		<EmbeddedResource Remove="TestHarness\**" />
+	</ItemGroup>
+
 	<ItemGroup>
 		<PackageReference Include="Microsoft.Extensions.AI" Version="10.3.0" />
-		<PackageReference Include="Microsoft.Maui.Controls" Version="$(MauiVersion)" />
+		<PackageReference Include="Microsoft.Maui.Controls" Version="10.0.31" />
 		<PackageReference Include="Microsoft.Extensions.Logging.Debug" Version="10.0.0" />
 		<PackageReference Include="Microsoft.Maui.Essentials.AI" Version="10.0.50-ci.main.26157.2" />
+		<PackageReference Include="Redth.MauiDevFlow.Agent" Version="0.20.0" />
 		<PackageReference Include="System.Numerics.Tensors" Version="10.0.3" />
 	</ItemGroup>
 

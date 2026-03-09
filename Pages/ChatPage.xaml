@@ -2,39 +2,35 @@
 <ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
              x:Class="OldFashionedMaker.Pages.ChatPage"
-             Title="🥃 Old Fashioned Maker"
-             BackgroundColor="#2C1810">
+             Title="🥃 Old Fashioned Maker">
 
-    <Grid RowDefinitions="*,Auto" Padding="0">
+    <Grid RowDefinitions="*,Auto">
 
         <!-- Chat messages area -->
-        <ScrollView x:Name="ChatScroll" Padding="12,8">
-            <VerticalStackLayout x:Name="MessageStack" Spacing="6">
-                <!-- Messages added dynamically -->
-            </VerticalStackLayout>
+        <ScrollView x:Name="ChatScroll" Grid.Row="0" Padding="12,8">
+            <VerticalStackLayout x:Name="MessageStack" Spacing="6" />
         </ScrollView>
 
         <!-- Input bar -->
-        <Border Grid.Row="1" BackgroundColor="#3D2517"
-                Stroke="Transparent" Padding="8,6">
-            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
-                <Entry x:Name="MessageEntry"
-                       Placeholder="Talk to your bartender..."
-                       PlaceholderColor="#8B7355"
-                       TextColor="#F0E6D8"
-                       BackgroundColor="#4A3228"
-                       FontSize="15"
-                       ReturnType="Send"
-                       Completed="OnSendClicked" />
-                <Button Grid.Column="1" Text="🥃"
-                        Clicked="OnSendClicked"
-                        BackgroundColor="#D4A574"
-                        TextColor="White"
-                        FontSize="18"
-                        WidthRequest="50" HeightRequest="44"
-                        CornerRadius="10" />
-            </Grid>
-        </Border>
+        <Grid Grid.Row="1" ColumnDefinitions="Auto,*,Auto" ColumnSpacing="8"
+              Padding="12,8" BackgroundColor="#3D2517">
+            <Button x:Name="MicButton" Grid.Column="0" Text="🎙️"
+                    BackgroundColor="#4A3228"
+                    TextColor="White"
+                    FontSize="18"
+                    WidthRequest="44" HeightRequest="44" />
+            <Entry x:Name="MessageEntry" Grid.Column="1"
+                   Placeholder="Talk to your bartender..."
+                   TextColor="White"
+                   BackgroundColor="#4A3228"
+                   FontSize="15"
+                   ReturnType="Send" />
+            <Button x:Name="SendButton" Grid.Column="2" Text="Send"
+                    BackgroundColor="#D4A574"
+                    TextColor="White"
+                    FontSize="15"
+                    HeightRequest="44" />
+        </Grid>
 
     </Grid>
 

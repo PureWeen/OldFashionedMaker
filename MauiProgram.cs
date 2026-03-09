@@ -1,5 +1,6 @@
 ﻿using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging;
+using MauiDevFlow.Agent;
 using OldFashionedMaker.Pages;
 using OldFashionedMaker.Services;
 
@@ -49,11 +50,17 @@ public static class MauiProgram
 			chatClient,
 			sp.GetRequiredService<BartenderTools>()));
 
+		// Speech service (voice chat — STT + TTS)
+#if IOS || MACCATALYST
+		builder.Services.AddSingleton<ISpeechService, AppleSpeechService>();
+#endif
+
 		// Pages
 		builder.Services.AddTransient<ChatPage>();
 
 #if DEBUG
 		builder.Logging.AddDebug();
+		builder.AddMauiDevFlowAgent();
 #endif
 
 		return builder.Build();
