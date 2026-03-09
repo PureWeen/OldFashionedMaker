@@ -99,11 +99,16 @@ public partial class ChatPage : ContentPage
                         OnSendClicked(this, EventArgs.Empty);
                     }
                 }
+
+                // Brief pause before restarting the recognizer
+                await Task.Delay(300);
             }
             catch (Exception ex)
             {
                 Console.WriteLine($"[Speech] Listen error: {ex.Message}");
                 _silenceCts?.Cancel();
+                // Delay before retry to avoid tight error loop
+                await Task.Delay(1000);
             }
         }
 
@@ -150,8 +155,16 @@ public partial class ChatPage : ContentPage
     private void OnSendClicked(object? sender, EventArgs e)
     {
         var message = MessageEntry.Text?.Trim();
-        if (string.IsNullOrWhiteSpace(message) || _isSending)
+        if (string.IsNullOrWhiteSpace(message))
             return;
+
+        // If an AI call is in-flight, cancel it so we can send the new message
+        if (_isSending)
+        {
+            _aiCts?.Cancel();
+            _speechService?.StopSpeaking();
+            _isSending = false;
+        }
 
         _isSending = true;
         MessageEntry.Text = string.Empty;
