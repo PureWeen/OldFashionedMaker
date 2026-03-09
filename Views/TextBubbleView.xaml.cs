@@ -30,4 +30,9 @@ public partial class TextBubbleView : ContentView
     {
         MessageLabel.Text = text;
     }
+
+    public string? GetText()
+    {
+        return MessageLabel.Text;
+    }
 }

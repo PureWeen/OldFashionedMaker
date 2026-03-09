@@ -40,6 +40,7 @@ public class ChatOrchestrator
             - GetHistory: Use when the user asks about past drinks, recent drinks, or their drink log.
             - SearchDrinks: Use when the user asks to find drinks by flavor or taste description.
             - GetStats: Use when the user asks about their preferences, stats, or patterns.
+            - GuideMeDrink: Use when the user wants to be walked through making a drink step by step. Call it once per step, incrementing stepNumber each time. When the user says "next", "ready", "done", or "go", call GuideMeDrink with the next step number.
 
             IMPORTANT: Never say you "can't" save or modify drinks. You have tools that do exactly that.
             When in doubt, USE the tool rather than explaining that you can't help.
@@ -54,11 +55,50 @@ public class ChatOrchestrator
                 AIFunctionFactory.Create(tools.GetHistory),
                 AIFunctionFactory.Create(tools.SearchDrinks),
                 AIFunctionFactory.Create(tools.GetStats),
+                AIFunctionFactory.Create(tools.GuideMeDrink),
             ]
         };
     }
 
     public ChatOptions? ChatOptions { get; }
+
+    /// <summary>
+    /// Send a message and stream the response token-by-token.
+    /// Calls onTextUpdate on each chunk so the UI can update incrementally.
+    /// </summary>
+    public async Task<string> SendMessageStreamingAsync(
+        string userMessage,
+        Action<string> onTextUpdate,
+        CancellationToken cancellationToken = default)
+    {
+        if (_client is null)
+            return "AI is not available on this device.";
+
+        _history.Add(new ChatMessage(ChatRole.User, userMessage));
+
+        Console.WriteLine($"[Chat] Streaming: {userMessage}");
+        Console.WriteLine($"[Chat] History length: {_history.Count}, Tools: {ChatOptions?.Tools?.Count ?? 0}");
+
+        var fullText = new System.Text.StringBuilder();
+
+        await foreach (var update in _client.GetStreamingResponseAsync(_history, ChatOptions, cancellationToken))
+        {
+            if (update.Text is { Length: > 0 } text)
+            {
+                fullText.Append(text);
+                MainThread.BeginInvokeOnMainThread(() => onTextUpdate(fullText.ToString()));
+            }
+        }
+
+        var responseText = fullText.ToString();
+
+        // Add the complete response to history
+        _history.Add(new ChatMessage(ChatRole.Assistant, responseText));
+
+        Console.WriteLine($"[Chat] Streamed: {responseText[..Math.Min(responseText.Length, 100)]}...");
+
+        return responseText.Length > 0 ? responseText : "I didn't get a response. Please try again.";
+    }
 
     /// <summary>
     /// Send a message and get the complete response.

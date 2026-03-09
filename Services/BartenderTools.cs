@@ -119,4 +119,43 @@ public class BartenderTools
             Highest rated: {topRated.Bourbon} ({topRated.Rating}/5) on {topRated.CreatedAt:MMM dd}
             """;
     }
+
+    [Description("""
+        Start a step-by-step guided drink making session. Returns detailed instructions for one step at a time.
+        The user will say "next" or "ready" to advance. Each step should be a short, clear instruction.
+        Use this when the user asks you to walk them through making a drink, guide them, or give step-by-step instructions.
+        """)]
+    public string GuideMeDrink(
+        [Description("The type of drink to make, e.g. 'classic Old Fashioned', 'smoky maple Old Fashioned'")] string drinkDescription = "classic Old Fashioned",
+        [Description("Which step number to return (1-based). Start at 1 for the first step.")] int stepNumber = 1)
+    {
+        // Provide structured step data — the AI model will present it conversationally
+        var steps = new Dictionary<string, string[]>
+        {
+            ["classic Old Fashioned"] =
+            [
+                "GATHER: You'll need bourbon (2oz), a sugar cube or 1/4oz simple syrup, 2 dashes Angostura bitters, an orange peel, and a large ice cube.",
+                "MUDDLE/SWEETEN: Place the sugar cube in your rocks glass. Add 2 dashes of Angostura bitters directly onto the sugar. Add a small splash of water. Muddle until dissolved. (Skip muddling if using simple syrup — just pour it in with the bitters.)",
+                "ADD BOURBON: Pour 2oz of your bourbon over the sweetener. Give it a gentle stir to combine.",
+                "ICE: Add one large ice cube (or ice sphere) to the glass. Stir for about 30 seconds to chill and dilute slightly.",
+                "GARNISH: Express an orange peel over the drink by holding it over the glass and giving it a firm squeeze. You should see the oils spray across the surface. Drop it in or rest it on the rim.",
+                "ENJOY: Your Old Fashioned is ready! Take a sip and savor it. 🥃"
+            ],
+        };
+
+        // Try to find a matching recipe, fall back to a generic prompt
+        if (steps.TryGetValue(drinkDescription, out var recipeSteps) && stepNumber >= 1 && stepNumber <= recipeSteps.Length)
+        {
+            var total = recipeSteps.Length;
+            var step = recipeSteps[stepNumber - 1];
+            var isLast = stepNumber == total;
+            return $"Step {stepNumber} of {total}: {step}" +
+                   (isLast ? "\n\nThat's the last step! Would you like to save this drink to your log?" : "\n\nSay 'next' when you're ready for the next step.");
+        }
+
+        // For unknown drinks, return instructions for the AI to improvise
+        return $"Please walk the user through making a {drinkDescription}, step {stepNumber}. " +
+               "Give ONE short, clear instruction. End with 'Say next when ready.' if there are more steps, " +
+               "or 'That's the last step!' if done. Include the step number and total.";
+    }
 }

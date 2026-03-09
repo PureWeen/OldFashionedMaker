@@ -171,7 +171,7 @@ public partial class ChatPage : ContentPage
 
         MessageStack.Children.Add(new TextBubbleView(message, isUser: true));
 
-        var aiBubble = new TextBubbleView("🤔 Thinking...", isUser: false);
+        var aiBubble = new TextBubbleView("", isUser: false);
         MessageStack.Children.Add(aiBubble);
 
         if (!_orchestrator.IsAvailable)
@@ -192,27 +192,57 @@ public partial class ChatPage : ContentPage
         {
             try
             {
-                var responseText = await orchestrator.SendMessageAsync(msg, aiToken);
+                var spokenUpTo = 0;
+                var responseText = await orchestrator.SendMessageStreamingAsync(msg,
+                    onTextUpdate: text =>
+                    {
+                        aiBubble.SetText(text);
+                        _ = ScrollToBottom();
+
+                        // In voice mode, speak completed sentences as they stream in
+                        if (shouldSpeak && !aiToken.IsCancellationRequested)
+                        {
+                            var sentenceEnd = text.LastIndexOfAny(['.', '!', '?', '\n'], text.Length - 1, text.Length - spokenUpTo);
+                            if (sentenceEnd > spokenUpTo)
+                            {
+                                var newSentence = text[spokenUpTo..(sentenceEnd + 1)].Trim();
+                                if (newSentence.Length > 0)
+                                {
+                                    spokenUpTo = sentenceEnd + 1;
+                                    _ = Task.Run(async () =>
+                                    {
+                                        try { await _speechService!.SpeakAsync(newSentence, aiToken); }
+                                        catch { /* cancelled or error */ }
+                                    });
+                                }
+                            }
+                        }
+                    },
+                    cancellationToken: aiToken);
 
                 MainThread.BeginInvokeOnMainThread(() =>
                 {
-                    aiBubble.SetText(responseText);
                     ShowNewDrinkCards();
                     _isSending = false;
                     _ = ScrollToBottom();
                 });
 
-                if (shouldSpeak && !aiToken.IsCancellationRequested)
+                // Speak any remaining text that didn't end with punctuation
+                if (shouldSpeak && !aiToken.IsCancellationRequested && spokenUpTo < responseText.Length)
                 {
-                    try { await _speechService!.SpeakAsync(responseText, aiToken); }
-                    catch (Exception ex) { Console.WriteLine($"[Speech] TTS error: {ex.Message}"); }
+                    var remaining = responseText[spokenUpTo..].Trim();
+                    if (remaining.Length > 0)
+                    {
+                        try { await _speechService!.SpeakAsync(remaining, aiToken); }
+                        catch { /* cancelled */ }
+                    }
                 }
             }
             catch (OperationCanceledException)
             {
                 MainThread.BeginInvokeOnMainThread(() =>
                 {
-                    aiBubble.SetText("⚠️ Interrupted");
+                    aiBubble.SetText(aiBubble.GetText() is { Length: > 0 } partial ? partial + "\n\n⚠️ Interrupted" : "⚠️ Interrupted");
                     _isSending = false;
                     _ = ScrollToBottom();
                 });
