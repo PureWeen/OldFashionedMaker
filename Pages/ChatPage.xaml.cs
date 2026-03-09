@@ -12,6 +12,7 @@ public partial class ChatPage : ContentPage
     private bool _voiceMode;
     private CancellationTokenSource? _listenCts;
     private CancellationTokenSource? _silenceCts;
+    private CancellationTokenSource? _aiCts;
     private string? _lastPartial;
 
     public ChatPage(ChatOrchestrator orchestrator, DrinkService drinkService, ISpeechService? speechService = null)
@@ -52,49 +53,61 @@ public partial class ChatPage : ContentPage
             return;
         }
 
-        if (_speechService.IsListening)
+        if (_voiceMode)
         {
-            // Stop listening — cancel will return the best transcription so far
+            // Exit voice mode entirely
+            _voiceMode = false;
+            _silenceCts?.Cancel();
             _listenCts?.Cancel();
             _speechService.StopListening();
-            MicButton.Text = "🎙️";
-            MicButton.BackgroundColor = Color.FromArgb("#4A3228");
+            _speechService.StopSpeaking();
+            StopVoiceUI();
             return;
         }
 
-        // Start listening — stream partial results into the text entry
+        // Enter continuous voice mode — loop: listen → send → listen
         _voiceMode = true;
         MicButton.Text = "⏹️";
         MicButton.BackgroundColor = Color.FromArgb("#C0392B");
-        MessageEntry.Placeholder = "Listening...";
-        _listenCts = new CancellationTokenSource();
 
-        try
+        while (_voiceMode)
         {
-            var result = await _speechService.ListenAsync(
-                onPartialResult: OnSpeechPartial,
-                cancellationToken: _listenCts.Token);
+            MessageEntry.Text = string.Empty;
+            MessageEntry.Placeholder = "Listening...";
+            _listenCts = new CancellationTokenSource();
 
-            _silenceCts?.Cancel();
-            StopVoiceUI();
-
-            if (!string.IsNullOrWhiteSpace(result))
+            try
             {
-                // Strip trailing "send" command if present
-                var text = StripSendCommand(result);
-                if (!string.IsNullOrWhiteSpace(text))
+                var result = await _speechService.ListenAsync(
+                    onPartialResult: OnSpeechPartial,
+                    cancellationToken: _listenCts.Token);
+
+                _silenceCts?.Cancel();
+
+                if (!_voiceMode) break;
+
+                if (!string.IsNullOrWhiteSpace(result))
                 {
-                    MessageEntry.Text = text;
-                    OnSendClicked(this, EventArgs.Empty);
+                    var text = StripSendCommand(result);
+                    if (!string.IsNullOrWhiteSpace(text))
+                    {
+                        // Cancel any in-flight AI response and TTS
+                        _aiCts?.Cancel();
+                        _speechService.StopSpeaking();
+
+                        MessageEntry.Text = text;
+                        OnSendClicked(this, EventArgs.Empty);
+                    }
                 }
             }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[Speech] Listen error: {ex.Message}");
+                _silenceCts?.Cancel();
+            }
         }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"[Speech] Listen error: {ex.Message}");
-            _silenceCts?.Cancel();
-            StopVoiceUI();
-        }
+
+        StopVoiceUI();
     }
 
     private void OnSpeechPartial(string partial)
@@ -158,11 +171,15 @@ public partial class ChatPage : ContentPage
         var msg = message;
         var orchestrator = _orchestrator;
         var shouldSpeak = _voiceMode && _speechService is not null;
+        _aiCts?.Cancel();
+        _aiCts = new CancellationTokenSource();
+        var aiToken = _aiCts.Token;
+
         new Thread(async () =>
         {
             try
             {
-                var responseText = await orchestrator.SendMessageAsync(msg);
+                var responseText = await orchestrator.SendMessageAsync(msg, aiToken);
 
                 MainThread.BeginInvokeOnMainThread(() =>
                 {
@@ -172,11 +189,20 @@ public partial class ChatPage : ContentPage
                     _ = ScrollToBottom();
                 });
 
-                if (shouldSpeak)
+                if (shouldSpeak && !aiToken.IsCancellationRequested)
                 {
-                    try { await _speechService!.SpeakAsync(responseText); }
+                    try { await _speechService!.SpeakAsync(responseText, aiToken); }
                     catch (Exception ex) { Console.WriteLine($"[Speech] TTS error: {ex.Message}"); }
                 }
+            }
+            catch (OperationCanceledException)
+            {
+                MainThread.BeginInvokeOnMainThread(() =>
+                {
+                    aiBubble.SetText("⚠️ Interrupted");
+                    _isSending = false;
+                    _ = ScrollToBottom();
+                });
             }
             catch (Exception ex)
             {
