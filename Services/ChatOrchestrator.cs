@@ -73,16 +73,19 @@ public class ChatOrchestrator
 
         _history.Add(new ChatMessage(ChatRole.User, userMessage));
 
+        System.Diagnostics.Debug.WriteLine($"[Bartender] Sending: {userMessage} (history: {_history.Count} msgs, tools: {ChatOptions?.Tools?.Count ?? 0})");
+
         var updates = new List<ChatResponseUpdate>();
 
         await foreach (var update in _client.GetStreamingResponseAsync(_history, ChatOptions))
         {
             updates.Add(update);
+            System.Diagnostics.Debug.WriteLine($"[Bartender] Token: '{update.Text}'");
             if (!string.IsNullOrEmpty(update.Text))
                 yield return update.Text;
         }
 
-        // Add response to history for multi-turn context
+        System.Diagnostics.Debug.WriteLine($"[Bartender] Done. {updates.Count} updates.");
         _history.AddMessages(updates);
     }
 

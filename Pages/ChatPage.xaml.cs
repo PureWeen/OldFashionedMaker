@@ -55,17 +55,37 @@ public partial class ChatPage : ContentPage
         {
             if (!_orchestrator.IsAvailable)
             {
-                // Fallback: non-AI mode
                 aiBubble.SetText("AI is not available on this device. " +
-                    "Apple Intelligence requires iOS/macOS 26+.");
+                    "Apple Intelligence requires iOS/macOS 26+.\n\n" +
+                    "Make sure you're running on a device with Apple Intelligence support.");
             }
             else
             {
+                aiBubble.SetText("🤔 Thinking...");
+                bool firstToken = true;
+
                 // Stream response token by token
                 await foreach (var token in _orchestrator.SendMessageStreamingAsync(message))
                 {
-                    aiBubble.AppendText(token);
+                    MainThread.BeginInvokeOnMainThread(() =>
+                    {
+                        if (firstToken)
+                        {
+                            aiBubble.SetText(token);
+                            firstToken = false;
+                        }
+                        else
+                        {
+                            aiBubble.AppendText(token);
+                        }
+                    });
                     await ScrollToBottom();
+                }
+
+                if (firstToken)
+                {
+                    // No tokens were yielded — the model returned nothing
+                    aiBubble.SetText("No response from the model. The AI may still be loading.");
                 }
             }
 
@@ -74,7 +94,11 @@ public partial class ChatPage : ContentPage
         }
         catch (Exception ex)
         {
-            aiBubble.SetText($"Something went wrong: {ex.Message}");
+            MainThread.BeginInvokeOnMainThread(() =>
+            {
+                aiBubble.SetText($"⚠️ Error: {ex.Message}\n\n{ex.GetType().Name}");
+            });
+            System.Diagnostics.Debug.WriteLine($"Chat error: {ex}");
         }
         finally
         {
