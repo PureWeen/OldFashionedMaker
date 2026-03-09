@@ -18,7 +18,7 @@ public class AppleSpeechService : ISpeechService
     public bool IsListening => _audioEngine?.Running == true;
     public bool IsSpeaking => _synthesizer?.Speaking == true;
 
-    public async Task<string?> ListenAsync(CancellationToken cancellationToken = default)
+    public async Task<string?> ListenAsync(Action<string>? onPartialResult = null, CancellationToken cancellationToken = default)
     {
         // Must request microphone access before touching AVAudioEngine
         var micStatus = await RequestMicrophoneAuthorizationAsync();
@@ -72,22 +72,24 @@ public class AppleSpeechService : ISpeechService
         });
 
         var tcs = new TaskCompletionSource<string?>();
+        string? bestTranscription = null;
 
-        // Wire up cancellation
+        // When cancelled (user taps stop), return whatever we have so far
         cancellationToken.Register(() =>
         {
             StopListening();
-            tcs.TrySetResult(null);
+            tcs.TrySetResult(bestTranscription);
         });
-
-        string? bestTranscription = null;
 
         _recognitionTask = _recognizer.GetRecognitionTask(_recognitionRequest, (result, error) =>
         {
             if (result != null)
             {
                 bestTranscription = result.BestTranscription.FormattedString;
-                Console.WriteLine($"[Speech] Partial: {bestTranscription}");
+
+                // Stream partial results to the UI
+                if (onPartialResult != null)
+                    MainThread.BeginInvokeOnMainThread(() => onPartialResult(bestTranscription));
 
                 if (result.Final)
                 {

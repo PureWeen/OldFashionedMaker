@@ -10,7 +10,9 @@ public interface ISpeechService
     bool IsSpeaking { get; }
 
     /// <summary>Start listening and return the recognized text when done.</summary>
-    Task<string?> ListenAsync(CancellationToken cancellationToken = default);
+    /// <param name="onPartialResult">Called with each partial transcription as the user speaks.</param>
+    /// <param name="cancellationToken">Cancellation token — when cancelled, returns the best result so far.</param>
+    Task<string?> ListenAsync(Action<string>? onPartialResult = null, CancellationToken cancellationToken = default);
 
     /// <summary>Stop an in-progress listen.</summary>
     void StopListening();

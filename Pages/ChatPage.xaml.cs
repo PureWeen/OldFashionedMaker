@@ -52,6 +52,7 @@ public partial class ChatPage : ContentPage
 
         if (_speechService.IsListening)
         {
+            // Stop listening — cancel will return the best transcription so far
             _listenCts?.Cancel();
             _speechService.StopListening();
             MicButton.Text = "🎙️";
@@ -59,18 +60,22 @@ public partial class ChatPage : ContentPage
             return;
         }
 
-        // Start listening — enable voice mode so AI reads response aloud
+        // Start listening — stream partial results into the text entry
         _voiceMode = true;
         MicButton.Text = "⏹️";
         MicButton.BackgroundColor = Color.FromArgb("#C0392B");
+        MessageEntry.Placeholder = "Listening...";
         _listenCts = new CancellationTokenSource();
 
         try
         {
-            var result = await _speechService.ListenAsync(_listenCts.Token);
+            var result = await _speechService.ListenAsync(
+                onPartialResult: partial => MessageEntry.Text = partial,
+                cancellationToken: _listenCts.Token);
 
             MicButton.Text = "🎙️";
             MicButton.BackgroundColor = Color.FromArgb("#4A3228");
+            MessageEntry.Placeholder = "Ask your bartender...";
 
             if (!string.IsNullOrWhiteSpace(result))
             {
@@ -83,6 +88,7 @@ public partial class ChatPage : ContentPage
             Console.WriteLine($"[Speech] Listen error: {ex.Message}");
             MicButton.Text = "🎙️";
             MicButton.BackgroundColor = Color.FromArgb("#4A3228");
+            MessageEntry.Placeholder = "Ask your bartender...";
         }
     }
 
