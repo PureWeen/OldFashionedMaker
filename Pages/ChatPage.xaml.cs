@@ -86,7 +86,7 @@ public partial class ChatPage : ContentPage
         }
     }
 
-    private void OnSendClicked(object? sender, EventArgs e)
+    private async void OnSendClicked(object? sender, EventArgs e)
     {
         var message = MessageEntry.Text?.Trim();
         if (string.IsNullOrWhiteSpace(message) || _isSending)
@@ -107,39 +107,32 @@ public partial class ChatPage : ContentPage
             return;
         }
 
-        var msg = message;
-        var orchestrator = _orchestrator;
-        var shouldSpeak = _voiceMode && _speechService is not null;
-        new Thread(async () =>
+        // Repro for dotnet/maui#34394: await directly on main thread.
+        // AppleIntelligenceChatClient.GetResponseAsync() deadlocks because the Swift
+        // onComplete callback dispatches back to the (blocked) main dispatch queue.
+        try
         {
-            try
-            {
-                var responseText = await orchestrator.SendMessageAsync(msg);
+            var responseText = await _orchestrator.SendMessageAsync(message);
 
-                MainThread.BeginInvokeOnMainThread(() =>
-                {
-                    aiBubble.SetText(responseText);
-                    ShowNewDrinkCards();
-                    _isSending = false;
-                    _ = ScrollToBottom();
-                });
+            aiBubble.SetText(responseText);
+            ShowNewDrinkCards();
+            await ScrollToBottom();
 
-                if (shouldSpeak)
-                {
-                    try { await _speechService!.SpeakAsync(responseText); }
-                    catch (Exception ex) { Console.WriteLine($"[Speech] TTS error: {ex.Message}"); }
-                }
-            }
-            catch (Exception ex)
+            if (_voiceMode && _speechService is not null)
             {
-                MainThread.BeginInvokeOnMainThread(() =>
-                {
-                    aiBubble.SetText($"⚠️ Error: {ex.GetType().Name}\n{ex.Message}");
-                    _isSending = false;
-                    _ = ScrollToBottom();
-                });
+                try { await _speechService.SpeakAsync(responseText); }
+                catch (Exception ex) { Console.WriteLine($"[Speech] TTS error: {ex.Message}"); }
             }
-        }) { IsBackground = true }.Start();
+        }
+        catch (Exception ex)
+        {
+            aiBubble.SetText($"⚠️ Error: {ex.GetType().Name}\n{ex.Message}");
+            await ScrollToBottom();
+        }
+        finally
+        {
+            _isSending = false;
+        }
     }
 
     private int _lastKnownDrinkCount;
