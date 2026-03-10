@@ -52,11 +52,12 @@ public partial class LogDrinkPage : ContentPage
                 .Build();
 
             _chatHistory.Add(new ChatMessage(ChatRole.System, """
-                You help log Old Fashioned cocktails AND answer questions about bourbon, cocktails, techniques.
+                You are a bartender helping log an Old Fashioned and answering questions.
+                IMPORTANT: If user asks a question (what, why, how, which, recommend, suggest, best, good),
+                ANSWER the question FIRST with helpful advice, THEN ask the next form field.
                 When logging: ask ONE field at a time, call FillDrinkForm after each answer.
                 Order: bourbon → sweetener → bitters → garnish → ice → rating → notes.
-                After ALL fields, call SaveCurrentDrink. If user gives multiple details, fill all and skip ahead.
-                "skip" keeps default. Be concise. Also answer any questions the user asks.
+                After ALL fields, call SaveCurrentDrink. "skip" keeps default.
                 """));
 
             _chatOptions = new ChatOptions
@@ -234,6 +235,13 @@ public partial class LogDrinkPage : ContentPage
             _chatHistory.Add(new ChatMessage(ChatRole.User, message));
             Console.WriteLine($"[LogForm] Sending: {message}");
 
+            // If user is asking a question, prepend a hint so AI answers instead of skipping
+            if (IsQuestion(message))
+            {
+                _chatHistory.Add(new ChatMessage(ChatRole.User, 
+                    "(Answer my question with bartender expertise before continuing the form)"));
+            }
+
             // Trim history to avoid context overflow — keep system + last 6 exchanges
             TrimHistory(maxUserMessages: 6);
 
@@ -362,6 +370,13 @@ public partial class LogDrinkPage : ContentPage
         _chatHistory.Add(system);
         _chatHistory.AddRange(recent);
         Console.WriteLine($"[LogForm] Trimmed history to {_chatHistory.Count} messages");
+    }
+
+    private static bool IsQuestion(string text)
+    {
+        var lower = text.TrimStart().ToLowerInvariant();
+        string[] questionWords = ["what", "why", "how", "which", "recommend", "suggest", "best", "good", "should", "would", "could", "tell me", "difference", "compare"];
+        return lower.Contains('?') || questionWords.Any(q => lower.StartsWith(q) || lower.Contains($" {q} "));
     }
 
     private void ShowAiResponse(string text)
