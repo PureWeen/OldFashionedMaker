@@ -77,7 +77,16 @@ public partial class LogDrinkPage : ContentPage
 
         if (_currentField == FormField.Bourbon)
         {
-            _ = AskCurrentFieldAsync();
+            _ = Task.Run(async () =>
+            {
+                await AskCurrentFieldAsync();
+                if (_voiceState.IsActive && _isVisible && _speechService is not null)
+                    MainThread.BeginInvokeOnMainThread(() => StartVoiceLoop());
+            });
+        }
+        else if (_voiceState.IsActive && _speechService is not null)
+        {
+            StartVoiceLoop();
         }
     }
 
@@ -249,13 +258,11 @@ public partial class LogDrinkPage : ContentPage
 
         ShowAiResponse(question);
 
+        // Speak the question — the calling voice loop will resume listening after this returns
         if (_voiceState.IsActive && _speechService is not null)
         {
             try { await _speechService.SpeakAsync(question); }
             catch { }
-            // Start voice loop after TTS if not already running
-            if (_isVisible && (_listenCts is null || _listenCts.IsCancellationRequested))
-                StartVoiceLoop();
         }
     }
 
