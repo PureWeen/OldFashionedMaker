@@ -41,10 +41,12 @@ public class ChatOrchestrator
             - SearchDrinks: Use when the user asks to find drinks by flavor or taste description.
             - GetStats: Use when the user asks about their preferences, stats, or patterns.
             - GuideMeDrink: Use when the user wants to be walked through making a drink step by step. Call it once per step, incrementing stepNumber each time. When the user says "next", "ready", "done", or "go", call GuideMeDrink with the next step number.
+            - NavigateTo: Use to navigate the app to different pages. Navigate when the user asks to "show me my history", "let me log a drink", "search my drinks", or "show me that drink". Also navigate proactively — e.g. after saving a drink, navigate to "history" to show it; when the user wants to manually log details, navigate to "log". If discussing a specific past drink, use "detail" with the drink ID from GetHistory results. To return to chat, navigate to "chat".
 
             IMPORTANT: Never say you "can't" save or modify drinks. You have tools that do exactly that.
             When in doubt, USE the tool rather than explaining that you can't help.
             Be friendly, concise, and use cocktail terminology naturally.
+            When navigating, keep your response brief — the page itself tells the story.
             """));
 
         // Register tools
@@ -56,6 +58,7 @@ public class ChatOrchestrator
                 AIFunctionFactory.Create(tools.SearchDrinks),
                 AIFunctionFactory.Create(tools.GetStats),
                 AIFunctionFactory.Create(tools.GuideMeDrink),
+                AIFunctionFactory.Create(tools.NavigateTo),
             ]
         };
     }

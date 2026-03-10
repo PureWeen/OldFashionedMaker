@@ -55,8 +55,16 @@ public static class MauiProgram
 		builder.Services.AddSingleton<ISpeechService, AppleSpeechService>();
 #endif
 
+		// AI helper service (used by DrinkDetail / Search pages)
+		builder.Services.AddSingleton(sp => new DrinkAIService(
+			chatClient, embeddingGenerator));
+
 		// Pages
 		builder.Services.AddTransient<ChatPage>();
+		builder.Services.AddTransient<HistoryPage>();
+		builder.Services.AddTransient<SearchPage>();
+		builder.Services.AddTransient<LogDrinkPage>();
+		builder.Services.AddTransient<DrinkDetailPage>();
 
 #if DEBUG
 		builder.Logging.AddDebug();

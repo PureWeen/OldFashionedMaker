@@ -121,6 +121,53 @@ public class BartenderTools
     }
 
     [Description("""
+        Navigate the app to a different page. Available pages:
+        - "history": The user's drink history list
+        - "search": Flavor-based semantic search of past drinks
+        - "log": Form to manually log a new drink with full details
+        - "detail": Show a specific drink's details (requires drinkId)
+        - "chat": Go back to the main chat page
+        Use this when the user asks to see their history, wants to search drinks, wants to log a new drink manually,
+        or wants to view a specific drink's details. Also navigate proactively when it makes sense — e.g. after saving
+        a drink, offer to show the history; or when discussing a past drink, offer to show its details.
+        """)]
+    public string NavigateTo(
+        [Description("Page to navigate to: 'history', 'search', 'log', 'detail', or 'chat'")] string page,
+        [Description("Optional drink ID when navigating to 'detail' page")] string? drinkId = null)
+    {
+        var route = page.ToLowerInvariant() switch
+        {
+            "history" => "history",
+            "search" => "search",
+            "log" => "log",
+            "detail" when !string.IsNullOrEmpty(drinkId) => $"detail?id={drinkId}",
+            "detail" => null,
+            "chat" => "..",
+            _ => null,
+        };
+
+        if (route is null)
+            return page == "detail"
+                ? "I need a drink ID to show details. Try asking about your history first."
+                : $"Unknown page '{page}'. Available: history, search, log, detail, chat.";
+
+        MainThread.BeginInvokeOnMainThread(async () =>
+        {
+            await Shell.Current.GoToAsync(route);
+        });
+
+        return page switch
+        {
+            "history" => "Navigating to your drink history. You can tap any drink to see its details.",
+            "search" => "Navigating to flavor search. Type a flavor description to find matching drinks.",
+            "log" => "Navigating to the drink log form. Fill in the details of your Old Fashioned.",
+            "detail" => $"Showing the details for that drink.",
+            "chat" => "Heading back to our chat.",
+            _ => $"Navigating to {page}.",
+        };
+    }
+
+    [Description("""
         Start a step-by-step guided drink making session. Returns detailed instructions for one step at a time.
         The user will say "next" or "ready" to advance. Each step should be a short, clear instruction.
         Use this when the user asks you to walk them through making a drink, guide them, or give step-by-step instructions.
