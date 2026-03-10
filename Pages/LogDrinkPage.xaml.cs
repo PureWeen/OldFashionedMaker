@@ -51,24 +51,12 @@ public partial class LogDrinkPage : ContentPage
                 .Build();
 
             _chatHistory.Add(new ChatMessage(ChatRole.System, """
-                You are a bartender assistant walking the user through logging a drink, one field at a time.
-                You have a FillDrinkForm tool to set form values.
-
-                WORKFLOW:
-                1. First, ask what bourbon/whiskey they used.
-                2. After they answer, call FillDrinkForm with that bourbon (and defaults for the rest), then ask about the sweetener.
-                3. After sweetener, call FillDrinkForm to update, then ask about bitters.
-                4. Then garnish, ice type, stir time.
-                5. Then ask for a rating (1-5 stars).
-                6. Finally ask for tasting notes.
-                7. After all fields are filled, say "All set! Tap 💾 Save Drink when you're ready."
-
-                RULES:
-                - Ask about ONE field at a time. Keep questions short and friendly.
-                - ALWAYS call FillDrinkForm after the user answers, updating ONLY the field they answered (keep previous values).
-                - If the user gives multiple details at once, fill them all and skip ahead.
-                - If the user says "skip" or "default", keep the default and move to the next field.
-                - Be concise — one short question per turn.
+                You help log Old Fashioned drinks by filling a form. Ask about ONE field at a time.
+                After each answer, call FillDrinkForm, then ask about the next field.
+                Order: bourbon → sweetener → bitters → garnish → ice → rating → notes.
+                If the user gives multiple details, fill them all and skip ahead.
+                Say "skip" keeps the default. After all fields, say "All set! Tap Save."
+                Be very concise.
                 """));
 
             _chatOptions = new ChatOptions
@@ -281,19 +269,19 @@ public partial class LogDrinkPage : ContentPage
 
     #region Form Tool
 
-    [Description("Fill the drink log form with the specified values. Call this whenever the user provides drink details.")]
+    [Description("Fill the drink form. Call after each user answer.")]
     private string FillDrinkForm(
-        [Description("Bourbon/whiskey name")] string bourbon = "Buffalo Trace",
-        [Description("Bourbon amount in oz (1-4)")] double bourbonOz = 2.0,
-        [Description("Sweetener: Simple Syrup, Demerara Syrup, Sugar Cube, Rich Simple Syrup, Honey Syrup, Maple Syrup")] string sugarType = "Simple Syrup",
-        [Description("Sweetener amount in oz (0-1)")] double sugarAmount = 0.25,
-        [Description("Bitters: Angostura, Orange, Peychaud's, Walnut, Chocolate, Cherry")] string bittersType = "Angostura",
-        [Description("Dashes of bitters (1-6)")] int bittersDashes = 2,
-        [Description("Garnish: Orange Peel, Luxardo Cherry, Both, Lemon Twist, None")] string garnish = "Orange Peel",
-        [Description("Ice: Large Cube, Ice Sphere, Regular Cubes, Crushed, Neat")] string iceType = "Large Cube",
-        [Description("Stir time in seconds (10-90)")] int stirTimeSeconds = 30,
+        [Description("Bourbon name")] string bourbon = "Buffalo Trace",
+        [Description("Oz (1-4)")] double bourbonOz = 2.0,
+        [Description("Sugar type")] string sugarType = "Simple Syrup",
+        [Description("Sugar oz (0-1)")] double sugarAmount = 0.25,
+        [Description("Bitters type")] string bittersType = "Angostura",
+        [Description("Dashes (1-6)")] int bittersDashes = 2,
+        [Description("Garnish")] string garnish = "Orange Peel",
+        [Description("Ice type")] string iceType = "Large Cube",
+        [Description("Stir seconds")] int stirTimeSeconds = 30,
         [Description("Rating 1-5")] int rating = 3,
-        [Description("Tasting notes")] string tastingNotes = "")
+        [Description("Notes")] string tastingNotes = "")
     {
         MainThread.BeginInvokeOnMainThread(() =>
         {
