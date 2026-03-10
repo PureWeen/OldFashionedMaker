@@ -23,6 +23,7 @@ public static class MauiProgram
 
 		// Data services
 		builder.Services.AddSingleton<DrinkService>();
+		builder.Services.AddSingleton<VoiceState>();
 
 		// AI services - Apple Intelligence (on-device)
 		IChatClient? chatClient = null;

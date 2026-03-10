@@ -8,18 +8,19 @@ public partial class ChatPage : ContentPage
     private readonly ChatOrchestrator _orchestrator;
     private readonly DrinkService _drinkService;
     private readonly ISpeechService? _speechService;
+    private readonly VoiceState _voiceState;
     private bool _isSending;
-    private bool _voiceMode;
     private CancellationTokenSource? _listenCts;
     private CancellationTokenSource? _silenceCts;
     private CancellationTokenSource? _aiCts;
     private string? _lastPartial;
 
-    public ChatPage(ChatOrchestrator orchestrator, DrinkService drinkService, ISpeechService? speechService = null)
+    public ChatPage(ChatOrchestrator orchestrator, DrinkService drinkService, VoiceState voiceState, ISpeechService? speechService = null)
     {
         InitializeComponent();
         _orchestrator = orchestrator;
         _drinkService = drinkService;
+        _voiceState = voiceState;
         _speechService = speechService;
 
         MessageEntry.Completed += OnSendClicked;
@@ -81,6 +82,23 @@ public partial class ChatPage : ContentPage
             MessageStack.Children.Add(welcome);
             await ScrollToBottom();
         }
+
+        // Resume voice mode if it was active on another page
+        if (_voiceState.IsActive && _speechService is not null)
+        {
+            MicButton.Text = "⏹️";
+            MicButton.BackgroundColor = Color.FromArgb("#C0392B");
+            StartVoiceLoop();
+        }
+    }
+
+    protected override void OnDisappearing()
+    {
+        base.OnDisappearing();
+        // Stop the listen loop but keep voice state active
+        _listenCts?.Cancel();
+        _silenceCts?.Cancel();
+        _speechService?.StopListening();
     }
 
     private async void OnMicClicked(object? sender, EventArgs e)
@@ -92,10 +110,10 @@ public partial class ChatPage : ContentPage
             return;
         }
 
-        if (_voiceMode)
+        if (_voiceState.IsActive)
         {
             // Exit voice mode entirely
-            _voiceMode = false;
+            _voiceState.SetActive(false);
             _silenceCts?.Cancel();
             _listenCts?.Cancel();
             _speechService.StopListening();
@@ -104,12 +122,18 @@ public partial class ChatPage : ContentPage
             return;
         }
 
-        // Enter continuous voice mode — loop: listen → send → listen
-        _voiceMode = true;
+        // Enter continuous voice mode
+        _voiceState.SetActive(true);
         MicButton.Text = "⏹️";
         MicButton.BackgroundColor = Color.FromArgb("#C0392B");
+        StartVoiceLoop();
+    }
 
-        while (_voiceMode)
+    private async void StartVoiceLoop()
+    {
+        if (_speechService is null) return;
+
+        while (_voiceState.IsActive)
         {
             MessageEntry.Text = string.Empty;
             MessageEntry.Placeholder = "Listening...";
@@ -123,14 +147,13 @@ public partial class ChatPage : ContentPage
 
                 _silenceCts?.Cancel();
 
-                if (!_voiceMode) break;
+                if (!_voiceState.IsActive) break;
 
                 if (!string.IsNullOrWhiteSpace(result))
                 {
                     var text = StripSendCommand(result);
                     if (!string.IsNullOrWhiteSpace(text))
                     {
-                        // Cancel any in-flight AI response and TTS
                         _aiCts?.Cancel();
                         _speechService.StopSpeaking();
 
@@ -139,14 +162,12 @@ public partial class ChatPage : ContentPage
                     }
                 }
 
-                // Brief pause before restarting the recognizer
                 await Task.Delay(300);
             }
             catch (Exception ex)
             {
                 Console.WriteLine($"[Speech] Listen error: {ex.Message}");
                 _silenceCts?.Cancel();
-                // Delay before retry to avoid tight error loop
                 await Task.Delay(1000);
             }
         }
@@ -235,7 +256,7 @@ public partial class ChatPage : ContentPage
 
         var msg = message;
         var orchestrator = _orchestrator;
-        var shouldSpeak = _voiceMode && _speechService is not null;
+        var shouldSpeak = _voiceState.IsActive && _speechService is not null;
         _aiCts?.Cancel();
         _aiCts = new CancellationTokenSource();
         var aiToken = _aiCts.Token;

@@ -114,16 +114,21 @@
         </Border>
 
         <!-- Chat input bar -->
-        <Grid Grid.Row="2" ColumnDefinitions="*,Auto" ColumnSpacing="8"
+        <Grid Grid.Row="2" ColumnDefinitions="Auto,*,Auto" ColumnSpacing="8"
               Padding="12,8" BackgroundColor="#3D2517">
-            <Entry x:Name="ChatEntry" Grid.Column="0"
-                   Placeholder="Describe your drink — I'll fill the form..."
+            <Button x:Name="MicButton" Grid.Column="0" Text="🎙️"
+                    BackgroundColor="#4A3228"
+                    TextColor="White"
+                    FontSize="18"
+                    WidthRequest="44" HeightRequest="44" />
+            <Entry x:Name="ChatEntry" Grid.Column="1"
+                   Placeholder="Describe your drink..."
                    PlaceholderColor="#A08060"
                    TextColor="White"
                    BackgroundColor="#4A3228"
                    FontSize="15"
                    ReturnType="Send" />
-            <Button x:Name="ChatSendButton" Grid.Column="1" Text="🪄"
+            <Button x:Name="ChatSendButton" Grid.Column="2" Text="🪄"
                     BackgroundColor="#D4A574"
                     TextColor="White"
                     FontSize="16"
