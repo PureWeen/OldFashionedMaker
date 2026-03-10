@@ -197,6 +197,19 @@ public partial class ChatPage : ContentPage
         if (string.IsNullOrWhiteSpace(message))
             return;
 
+        // Check for direct navigation commands before sending to AI
+        var navRoute = DetectNavigationIntent(message);
+        if (navRoute is not null)
+        {
+            MessageEntry.Text = string.Empty;
+            MessageStack.Children.Add(new TextBubbleView(message, isUser: true));
+            var navBubble = new TextBubbleView(navRoute.Value.response, isUser: false);
+            MessageStack.Children.Add(navBubble);
+            _ = ScrollToBottom();
+            _ = Shell.Current.GoToAsync(navRoute.Value.route);
+            return;
+        }
+
         // If an AI call is in-flight, cancel it so we can send the new message
         if (_isSending)
         {
@@ -321,5 +334,32 @@ public partial class ChatPage : ContentPage
     {
         await Task.Delay(50);
         await ChatScroll.ScrollToAsync(0, MessageStack.Height, animated: true);
+    }
+
+    private static (string route, string response)? DetectNavigationIntent(string message)
+    {
+        var lower = message.ToLowerInvariant();
+
+        // History page
+        if (lower.Contains("history") || lower.Contains("past drinks") || lower.Contains("my drinks") ||
+            lower.Contains("show me my") && (lower.Contains("drink") || lower.Contains("log")))
+            return ("history", "📋 Opening your drink history...");
+
+        // Search page
+        if (lower.Contains("search") && (lower.Contains("drink") || lower.Contains("flavor") || lower.Contains("find")))
+            return ("search", "🔍 Opening flavor search...");
+
+        // Log page
+        if ((lower.Contains("log") && lower.Contains("drink")) ||
+            (lower.Contains("log") && lower.Contains("manual")) ||
+            lower.Contains("log a drink") || lower.Contains("log drink") ||
+            (lower.Contains("manual") && (lower.Contains("log") || lower.Contains("drink"))))
+            return ("log", "🥃 Opening the drink log form...");
+
+        // Back to chat
+        if (lower.Contains("go back") || lower.Contains("back to chat"))
+            return ("..", "💬 Heading back to chat...");
+
+        return null;
     }
 }
