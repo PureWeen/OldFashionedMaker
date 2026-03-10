@@ -40,6 +40,10 @@ public static class MauiProgram
 		if (embeddingGenerator is not null)
 			builder.Services.AddSingleton(embeddingGenerator);
 
+		// Register raw chat client for pages that need their own AI pipeline
+		if (chatClient is not null)
+			builder.Services.AddSingleton(chatClient);
+
 		// Bartender tools (AI-callable functions)
 		builder.Services.AddSingleton(sp => new BartenderTools(
 			sp.GetRequiredService<DrinkService>(),

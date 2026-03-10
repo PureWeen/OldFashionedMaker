@@ -4,102 +4,132 @@
              x:Class="OldFashionedMaker.Pages.LogDrinkPage"
              Title="🥃 Log Drink">
 
-    <ScrollView>
-        <VerticalStackLayout Padding="20" Spacing="12">
+    <Grid RowDefinitions="*,Auto,Auto">
 
-            <Label Text="New Old Fashioned" FontSize="24" FontAttributes="Bold" />
+        <!-- Form area -->
+        <ScrollView Grid.Row="0">
+            <VerticalStackLayout Padding="20" Spacing="12">
 
-            <!-- Bourbon -->
-            <Label Text="Bourbon" FontAttributes="Bold" />
-            <Entry x:Name="BourbonEntry" Placeholder="e.g. Buffalo Trace, Maker's Mark" />
+                <Label Text="New Old Fashioned" FontSize="24" FontAttributes="Bold" />
 
-            <Label Text="Amount (oz)" />
-            <Stepper x:Name="BourbonOzStepper" Minimum="1" Maximum="4" Increment="0.25" Value="2" />
-            <Label x:Name="BourbonOzLabel" Text="2 oz" />
+                <!-- Bourbon -->
+                <Label Text="Bourbon" FontAttributes="Bold" />
+                <Entry x:Name="BourbonEntry" Placeholder="e.g. Buffalo Trace, Maker's Mark" />
 
-            <!-- Sugar -->
-            <Label Text="Sweetener" FontAttributes="Bold" />
-            <Picker x:Name="SugarPicker" Title="Sugar Type">
-                <Picker.ItemsSource>
-                    <x:Array Type="{x:Type x:String}">
-                        <x:String>Simple Syrup</x:String>
-                        <x:String>Demerara Syrup</x:String>
-                        <x:String>Sugar Cube</x:String>
-                        <x:String>Rich Simple Syrup</x:String>
-                        <x:String>Honey Syrup</x:String>
-                        <x:String>Maple Syrup</x:String>
-                    </x:Array>
-                </Picker.ItemsSource>
-            </Picker>
-            <Stepper x:Name="SugarStepper" Minimum="0" Maximum="1" Increment="0.125" Value="0.25" />
-            <Label x:Name="SugarLabel" Text="0.25 oz" />
+                <Label Text="Amount (oz)" />
+                <Stepper x:Name="BourbonOzStepper" Minimum="1" Maximum="4" Increment="0.25" Value="2" />
+                <Label x:Name="BourbonOzLabel" Text="2 oz" />
 
-            <!-- Bitters -->
-            <Label Text="Bitters" FontAttributes="Bold" />
-            <Picker x:Name="BittersPicker" Title="Bitters Type">
-                <Picker.ItemsSource>
-                    <x:Array Type="{x:Type x:String}">
-                        <x:String>Angostura</x:String>
-                        <x:String>Orange</x:String>
-                        <x:String>Peychaud's</x:String>
-                        <x:String>Walnut</x:String>
-                        <x:String>Chocolate</x:String>
-                        <x:String>Cherry</x:String>
-                    </x:Array>
-                </Picker.ItemsSource>
-            </Picker>
-            <Stepper x:Name="BittersStepper" Minimum="1" Maximum="6" Increment="1" Value="2" />
-            <Label x:Name="BittersLabel" Text="2 dashes" />
+                <!-- Sugar -->
+                <Label Text="Sweetener" FontAttributes="Bold" />
+                <Picker x:Name="SugarPicker" Title="Sugar Type">
+                    <Picker.ItemsSource>
+                        <x:Array Type="{x:Type x:String}">
+                            <x:String>Simple Syrup</x:String>
+                            <x:String>Demerara Syrup</x:String>
+                            <x:String>Sugar Cube</x:String>
+                            <x:String>Rich Simple Syrup</x:String>
+                            <x:String>Honey Syrup</x:String>
+                            <x:String>Maple Syrup</x:String>
+                        </x:Array>
+                    </Picker.ItemsSource>
+                </Picker>
+                <Stepper x:Name="SugarStepper" Minimum="0" Maximum="1" Increment="0.125" Value="0.25" />
+                <Label x:Name="SugarLabel" Text="0.25 oz" />
 
-            <!-- Garnish -->
-            <Label Text="Garnish" FontAttributes="Bold" />
-            <Picker x:Name="GarnishPicker" Title="Garnish">
-                <Picker.ItemsSource>
-                    <x:Array Type="{x:Type x:String}">
-                        <x:String>Orange Peel</x:String>
-                        <x:String>Luxardo Cherry</x:String>
-                        <x:String>Both</x:String>
-                        <x:String>Lemon Twist</x:String>
-                        <x:String>None</x:String>
-                    </x:Array>
-                </Picker.ItemsSource>
-            </Picker>
+                <!-- Bitters -->
+                <Label Text="Bitters" FontAttributes="Bold" />
+                <Picker x:Name="BittersPicker" Title="Bitters Type">
+                    <Picker.ItemsSource>
+                        <x:Array Type="{x:Type x:String}">
+                            <x:String>Angostura</x:String>
+                            <x:String>Orange</x:String>
+                            <x:String>Peychaud's</x:String>
+                            <x:String>Walnut</x:String>
+                            <x:String>Chocolate</x:String>
+                            <x:String>Cherry</x:String>
+                        </x:Array>
+                    </Picker.ItemsSource>
+                </Picker>
+                <Stepper x:Name="BittersStepper" Minimum="1" Maximum="6" Increment="1" Value="2" />
+                <Label x:Name="BittersLabel" Text="2 dashes" />
 
-            <!-- Ice & Technique -->
-            <Label Text="Ice" FontAttributes="Bold" />
-            <Picker x:Name="IcePicker" Title="Ice Type">
-                <Picker.ItemsSource>
-                    <x:Array Type="{x:Type x:String}">
-                        <x:String>Large Cube</x:String>
-                        <x:String>Ice Sphere</x:String>
-                        <x:String>Regular Cubes</x:String>
-                        <x:String>Crushed</x:String>
-                        <x:String>Neat</x:String>
-                    </x:Array>
-                </Picker.ItemsSource>
-            </Picker>
+                <!-- Garnish -->
+                <Label Text="Garnish" FontAttributes="Bold" />
+                <Picker x:Name="GarnishPicker" Title="Garnish">
+                    <Picker.ItemsSource>
+                        <x:Array Type="{x:Type x:String}">
+                            <x:String>Orange Peel</x:String>
+                            <x:String>Luxardo Cherry</x:String>
+                            <x:String>Both</x:String>
+                            <x:String>Lemon Twist</x:String>
+                            <x:String>None</x:String>
+                        </x:Array>
+                    </Picker.ItemsSource>
+                </Picker>
 
-            <Label Text="Stir Time" FontAttributes="Bold" />
-            <Stepper x:Name="StirStepper" Minimum="10" Maximum="90" Increment="5" Value="30" />
-            <Label x:Name="StirLabel" Text="30 seconds" />
+                <!-- Ice & Technique -->
+                <Label Text="Ice" FontAttributes="Bold" />
+                <Picker x:Name="IcePicker" Title="Ice Type">
+                    <Picker.ItemsSource>
+                        <x:Array Type="{x:Type x:String}">
+                            <x:String>Large Cube</x:String>
+                            <x:String>Ice Sphere</x:String>
+                            <x:String>Regular Cubes</x:String>
+                            <x:String>Crushed</x:String>
+                            <x:String>Neat</x:String>
+                        </x:Array>
+                    </Picker.ItemsSource>
+                </Picker>
 
-            <!-- Rating -->
-            <Label Text="Rating" FontAttributes="Bold" FontSize="18" />
-            <HorizontalStackLayout Spacing="8">
-                <Label x:Name="RatingLabel" Text="⭐⭐⭐" FontSize="24" />
-            </HorizontalStackLayout>
-            <Slider x:Name="RatingSlider" Minimum="1" Maximum="5" Value="3" />
+                <Label Text="Stir Time" FontAttributes="Bold" />
+                <Stepper x:Name="StirStepper" Minimum="10" Maximum="90" Increment="5" Value="30" />
+                <Label x:Name="StirLabel" Text="30 seconds" />
 
-            <!-- Notes -->
-            <Label Text="Tasting Notes" FontAttributes="Bold" />
-            <Editor x:Name="NotesEditor" Placeholder="How did it taste? What stood out?"
-                    HeightRequest="100" />
+                <!-- Rating -->
+                <Label Text="Rating" FontAttributes="Bold" FontSize="18" />
+                <HorizontalStackLayout Spacing="8">
+                    <Label x:Name="RatingLabel" Text="⭐⭐⭐" FontSize="24" />
+                </HorizontalStackLayout>
+                <Slider x:Name="RatingSlider" Minimum="1" Maximum="5" Value="3" />
 
-            <Button Text="💾 Save Drink" Clicked="OnSaveClicked"
-                    BackgroundColor="#D4A574" TextColor="White" FontAttributes="Bold"
-                    Margin="0,10,0,0" />
+                <!-- Notes -->
+                <Label Text="Tasting Notes" FontAttributes="Bold" />
+                <Editor x:Name="NotesEditor" Placeholder="How did it taste? What stood out?"
+                        HeightRequest="100" />
 
-        </VerticalStackLayout>
-    </ScrollView>
+                <Button Text="💾 Save Drink" Clicked="OnSaveClicked"
+                        BackgroundColor="#D4A574" TextColor="White" FontAttributes="Bold"
+                        Margin="0,10,0,0" />
+
+            </VerticalStackLayout>
+        </ScrollView>
+
+        <!-- AI response area -->
+        <Border Grid.Row="1" Padding="10,6" Margin="12,4"
+                StrokeShape="RoundRectangle 8" Stroke="#D4A574" BackgroundColor="#FDF6EE"
+                IsVisible="False" x:Name="AiResponseBorder">
+            <Label x:Name="AiResponseLabel" FontSize="13" TextColor="#2C1810"
+                   LineBreakMode="WordWrap" />
+        </Border>
+
+        <!-- Chat input bar -->
+        <Grid Grid.Row="2" ColumnDefinitions="*,Auto" ColumnSpacing="8"
+              Padding="12,8" BackgroundColor="#3D2517">
+            <Entry x:Name="ChatEntry" Grid.Column="0"
+                   Placeholder="Describe your drink — I'll fill the form..."
+                   PlaceholderColor="#A08060"
+                   TextColor="White"
+                   BackgroundColor="#4A3228"
+                   FontSize="15"
+                   ReturnType="Send" />
+            <Button x:Name="ChatSendButton" Grid.Column="1" Text="🪄"
+                    BackgroundColor="#D4A574"
+                    TextColor="White"
+                    FontSize="16"
+                    HeightRequest="44" WidthRequest="50" />
+        </Grid>
+
+    </Grid>
 
 </ContentPage>
