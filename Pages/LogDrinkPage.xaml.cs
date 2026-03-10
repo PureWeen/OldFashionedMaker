@@ -51,18 +51,18 @@ public partial class LogDrinkPage : ContentPage
                 .Build();
 
             _chatHistory.Add(new ChatMessage(ChatRole.System, """
-                You help log Old Fashioned drinks by filling a form. Ask about ONE field at a time.
-                After each answer, call FillDrinkForm, then ask about the next field.
+                You help log drinks. Ask ONE field at a time, call FillDrinkForm after each answer.
                 Order: bourbon → sweetener → bitters → garnish → ice → rating → notes.
-                If the user gives multiple details, fill them all and skip ahead.
-                Say "skip" keeps the default. After all fields, say "All set! Tap Save."
-                Be very concise.
+                After ALL fields are filled, call SaveCurrentDrink to save it automatically.
+                If user gives multiple details at once, fill them all and skip ahead.
+                "skip" keeps the default. Be very concise — one short question per turn.
                 """));
 
             _chatOptions = new ChatOptions
             {
                 Tools = [
                     AIFunctionFactory.Create(FillDrinkForm),
+                    AIFunctionFactory.Create(SaveCurrentDrink),
                 ]
             };
         }
@@ -311,6 +311,44 @@ public partial class LogDrinkPage : ContentPage
         });
 
         return $"Form updated: {bourbonOz}oz {bourbon}, {sugarAmount} {sugarType}, {bittersDashes} dashes {bittersType}, {garnish}, {iceType}, stirred {stirTimeSeconds}s, {rating}/5.";
+    }
+
+    [Description("Save the current drink. Call after all fields are filled.")]
+    private string SaveCurrentDrink()
+    {
+        string summary = "";
+        ManualResetEventSlim done = new();
+
+        MainThread.BeginInvokeOnMainThread(() =>
+        {
+            var drink = new DrinkRecipe
+            {
+                Bourbon = BourbonEntry.Text?.Trim() ?? "Buffalo Trace",
+                BourbonOz = BourbonOzStepper.Value,
+                SugarType = SugarPicker.SelectedItem?.ToString() ?? "Simple Syrup",
+                SugarAmount = SugarStepper.Value,
+                BittersType = BittersPicker.SelectedItem?.ToString() ?? "Angostura",
+                BittersDashes = (int)BittersStepper.Value,
+                Garnish = GarnishPicker.SelectedItem?.ToString() ?? "Orange Peel",
+                IceType = IcePicker.SelectedItem?.ToString() ?? "Large Cube",
+                StirTimeSeconds = (int)StirStepper.Value,
+                Rating = (int)Math.Round(RatingSlider.Value),
+                TastingNotes = NotesEditor.Text?.Trim() ?? string.Empty,
+            };
+
+            _drinkService.Save(drink);
+            summary = $"Saved! {drink.RecipeSummary} ({drink.Rating}/5 ⭐)";
+
+            BourbonEntry.Text = string.Empty;
+            NotesEditor.Text = string.Empty;
+            RatingSlider.Value = 3;
+            RatingLabel.Text = "⭐⭐⭐";
+
+            done.Set();
+        });
+
+        done.Wait(TimeSpan.FromSeconds(5));
+        return summary.Length > 0 ? summary : "Drink saved!";
     }
 
     private static void SelectPickerItem(Picker picker, string value)
