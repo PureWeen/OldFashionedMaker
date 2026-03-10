@@ -220,19 +220,6 @@ public partial class ChatPage : ContentPage
         if (string.IsNullOrWhiteSpace(message))
             return;
 
-        // Check for direct navigation commands before sending to AI
-        var navRoute = DetectNavigationIntent(message);
-        if (navRoute is not null)
-        {
-            MessageEntry.Text = string.Empty;
-            MessageStack.Children.Add(new TextBubbleView(message, isUser: true));
-            var navBubble = new TextBubbleView(navRoute.Value.response, isUser: false);
-            MessageStack.Children.Add(navBubble);
-            _ = ScrollToBottom();
-            _ = Shell.Current.GoToAsync(navRoute.Value.route);
-            return;
-        }
-
         // If an AI call is in-flight, cancel it so we can send the new message
         if (_isSending)
         {
@@ -267,50 +254,32 @@ public partial class ChatPage : ContentPage
         {
             try
             {
-                var spokenUpTo = 0;
-                var responseText = await orchestrator.SendMessageStreamingAsync(msg,
-                    onTextUpdate: text =>
-                    {
-                        aiBubble.SetText(text);
-                        _ = ScrollToBottom();
+                // Use non-streaming so UseFunctionInvocation() middleware properly handles tool calls
+                MainThread.BeginInvokeOnMainThread(() => aiBubble.SetText("🤔 Thinking..."));
 
-                        // In voice mode, speak completed sentences as they stream in
-                        if (shouldSpeak && !aiToken.IsCancellationRequested)
-                        {
-                            var sentenceEnd = text.LastIndexOfAny(['.', '!', '?', '\n'], text.Length - 1, text.Length - spokenUpTo);
-                            if (sentenceEnd > spokenUpTo)
-                            {
-                                var newSentence = text[spokenUpTo..(sentenceEnd + 1)].Trim();
-                                if (newSentence.Length > 0)
-                                {
-                                    spokenUpTo = sentenceEnd + 1;
-                                    _ = Task.Run(async () =>
-                                    {
-                                        try { await _speechService!.SpeakAsync(newSentence, aiToken); }
-                                        catch { /* cancelled or error */ }
-                                    });
-                                }
-                            }
-                        }
-                    },
-                    cancellationToken: aiToken);
+                var responseText = await orchestrator.SendMessageAsync(msg, aiToken);
+
+                // Filter out "null" from tool-call messages
+                if (responseText.Contains("null", StringComparison.Ordinal))
+                {
+                    responseText = responseText.Replace("null", "").Trim();
+                    if (string.IsNullOrWhiteSpace(responseText))
+                        responseText = "Done!";
+                }
 
                 MainThread.BeginInvokeOnMainThread(() =>
                 {
+                    aiBubble.SetText(responseText);
                     ShowNewDrinkCards();
                     _isSending = false;
                     _ = ScrollToBottom();
                 });
 
-                // Speak any remaining text that didn't end with punctuation
-                if (shouldSpeak && !aiToken.IsCancellationRequested && spokenUpTo < responseText.Length)
+                // Speak the full response
+                if (shouldSpeak && !aiToken.IsCancellationRequested)
                 {
-                    var remaining = responseText[spokenUpTo..].Trim();
-                    if (remaining.Length > 0)
-                    {
-                        try { await _speechService!.SpeakAsync(remaining, aiToken); }
-                        catch { /* cancelled */ }
-                    }
+                    try { await _speechService!.SpeakAsync(responseText, aiToken); }
+                    catch { /* cancelled */ }
                 }
             }
             catch (OperationCanceledException)
@@ -359,30 +328,4 @@ public partial class ChatPage : ContentPage
         await ChatScroll.ScrollToAsync(0, MessageStack.Height, animated: true);
     }
 
-    private static (string route, string response)? DetectNavigationIntent(string message)
-    {
-        var lower = message.ToLowerInvariant();
-
-        // History page
-        if (lower.Contains("history") || lower.Contains("past drinks") || lower.Contains("my drinks") ||
-            lower.Contains("show me my") && (lower.Contains("drink") || lower.Contains("log")))
-            return ("history", "📋 Opening your drink history...");
-
-        // Search page
-        if (lower.Contains("search") && (lower.Contains("drink") || lower.Contains("flavor") || lower.Contains("find")))
-            return ("search", "🔍 Opening flavor search...");
-
-        // Log page
-        if ((lower.Contains("log") && lower.Contains("drink")) ||
-            (lower.Contains("log") && lower.Contains("manual")) ||
-            lower.Contains("log a drink") || lower.Contains("log drink") ||
-            (lower.Contains("manual") && (lower.Contains("log") || lower.Contains("drink"))))
-            return ("log", "🥃 Opening the drink log form...");
-
-        // Back to chat
-        if (lower.Contains("go back") || lower.Contains("back to chat"))
-            return ("..", "💬 Heading back to chat...");
-
-        return null;
-    }
 }

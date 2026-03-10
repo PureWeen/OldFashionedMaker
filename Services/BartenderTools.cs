@@ -120,20 +120,10 @@ public class BartenderTools
             """;
     }
 
-    [Description("""
-        Navigate the app to a different page. Available pages:
-        - "history": The user's drink history list
-        - "search": Flavor-based semantic search of past drinks
-        - "log": Form to manually log a new drink with full details
-        - "detail": Show a specific drink's details (requires drinkId)
-        - "chat": Go back to the main chat page
-        Use this when the user asks to see their history, wants to search drinks, wants to log a new drink manually,
-        or wants to view a specific drink's details. Also navigate proactively when it makes sense — e.g. after saving
-        a drink, offer to show the history; or when discussing a past drink, offer to show its details.
-        """)]
+    [Description("Navigate the app. Pages: history, search, log, detail, chat. Always use this when user wants to go somewhere.")]
     public string NavigateTo(
-        [Description("Page to navigate to: 'history', 'search', 'log', 'detail', or 'chat'")] string page,
-        [Description("Optional drink ID when navigating to 'detail' page")] string? drinkId = null)
+        [Description("Page: history, search, log, detail, chat")] string page,
+        [Description("Drink ID for detail page")] string? drinkId = null)
     {
         var route = page.ToLowerInvariant() switch
         {
@@ -167,14 +157,10 @@ public class BartenderTools
         };
     }
 
-    [Description("""
-        Start a step-by-step guided drink making session. Returns detailed instructions for one step at a time.
-        The user will say "next" or "ready" to advance. Each step should be a short, clear instruction.
-        Use this when the user asks you to walk them through making a drink, guide them, or give step-by-step instructions.
-        """)]
+    [Description("Start step-by-step guided drink making. Returns one step at a time.")]
     public string GuideMeDrink(
-        [Description("The type of drink to make, e.g. 'classic Old Fashioned', 'smoky maple Old Fashioned'")] string drinkDescription = "classic Old Fashioned",
-        [Description("Which step number to return (1-based). Start at 1 for the first step.")] int stepNumber = 1)
+        [Description("Drink type, e.g. 'classic Old Fashioned'")] string drinkDescription = "classic Old Fashioned",
+        [Description("Step number (1-based)")] int stepNumber = 1)
     {
         // Provide structured step data — the AI model will present it conversationally
         var steps = new Dictionary<string, string[]>
