@@ -25,6 +25,45 @@ public partial class ChatPage : ContentPage
         MessageEntry.Completed += OnSendClicked;
         SendButton.Clicked += OnSendClicked;
         MicButton.Clicked += OnMicClicked;
+        HelpButton.Clicked += OnHelpClicked;
+    }
+
+    private async void OnHelpClicked(object? sender, EventArgs e)
+    {
+        var help = """
+            🎙️ VOICE MODE
+            • Tap 🎙️ to start hands-free mode
+            • Just talk — text appears as you speak
+            • Say "send" to send immediately
+            • Pause 3 seconds to auto-send
+            • Tap ⏹️ to exit voice mode
+            • Speak while AI is talking to interrupt
+
+            🥃 DRINKS
+            • "Save my drink — Buffalo Trace, neat"
+            • "I made one with Maker's Mark, cherry garnish, 4 stars"
+            • "What are my stats?"
+            • "Show me my recent drinks"
+            • "Find my smoky drinks"
+
+            👨‍🍳 GUIDED MODE
+            • "Walk me through making an Old Fashioned"
+            • "Guide me step by step"
+            • Say "next" or "ready" to advance steps
+
+            🗺️ NAVIGATION
+            • "Show me my history"
+            • "Let me search my drinks"
+            • "I want to log a drink manually"
+            • "Go back to chat"
+
+            💬 GENERAL
+            • Ask about cocktail techniques
+            • Get advice on improving your drink
+            • Chat about bourbon recommendations
+            """;
+
+        await DisplayAlertAsync("What can I do? 🥃", help, "Got it!");
     }
 
     protected override async void OnAppearing()

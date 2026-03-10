@@ -12,20 +12,25 @@
         </ScrollView>
 
         <!-- Input bar -->
-        <Grid Grid.Row="1" ColumnDefinitions="Auto,*,Auto" ColumnSpacing="8"
+        <Grid Grid.Row="1" ColumnDefinitions="Auto,Auto,*,Auto" ColumnSpacing="8"
               Padding="12,8" BackgroundColor="#3D2517">
-            <Button x:Name="MicButton" Grid.Column="0" Text="🎙️"
+            <Button x:Name="HelpButton" Grid.Column="0" Text="❓"
+                    BackgroundColor="#4A3228"
+                    TextColor="White"
+                    FontSize="16"
+                    WidthRequest="44" HeightRequest="44" />
+            <Button x:Name="MicButton" Grid.Column="1" Text="🎙️"
                     BackgroundColor="#4A3228"
                     TextColor="White"
                     FontSize="18"
                     WidthRequest="44" HeightRequest="44" />
-            <Entry x:Name="MessageEntry" Grid.Column="1"
+            <Entry x:Name="MessageEntry" Grid.Column="2"
                    Placeholder="Talk to your bartender..."
                    TextColor="White"
                    BackgroundColor="#4A3228"
                    FontSize="15"
                    ReturnType="Send" />
-            <Button x:Name="SendButton" Grid.Column="2" Text="Send"
+            <Button x:Name="SendButton" Grid.Column="3" Text="Send"
                     BackgroundColor="#D4A574"
                     TextColor="White"
                     FontSize="15"
