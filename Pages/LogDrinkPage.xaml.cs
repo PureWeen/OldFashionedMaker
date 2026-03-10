@@ -10,13 +10,26 @@ public partial class LogDrinkPage : ContentPage
     private readonly DrinkService _drinkService;
     private readonly ISpeechService? _speechService;
     private readonly VoiceState _voiceState;
-    private readonly IChatClient? _formClient;
-    private readonly List<ChatMessage> _chatHistory = [];
-    private readonly ChatOptions? _chatOptions;
+    private readonly IChatClient? _aiClient;
     private bool _isSending;
     private bool _isVisible;
     private CancellationTokenSource? _listenCts;
     private CancellationTokenSource? _silenceCts;
+
+    // State machine for form walkthrough
+    private enum FormField { Bourbon, Sweetener, Bitters, Garnish, Ice, Rating, Notes, Done }
+    private FormField _currentField = FormField.Bourbon;
+
+    private static readonly Dictionary<FormField, string> FieldQuestions = new()
+    {
+        [FormField.Bourbon] = "🥃 What bourbon are you using today?",
+        [FormField.Sweetener] = "🍯 What sweetener? (simple syrup, demerara, maple, or say 'skip')",
+        [FormField.Bitters] = "💧 What bitters? (Angostura, orange, Peychaud's, or 'skip')",
+        [FormField.Garnish] = "🍊 Garnish? (orange peel, cherry, both, or 'skip')",
+        [FormField.Ice] = "🧊 Ice type? (large cube, sphere, crushed, or 'skip')",
+        [FormField.Rating] = "⭐ Rate this drink 1-5?",
+        [FormField.Notes] = "📝 Any tasting notes? (or 'skip')",
+    };
 
     public LogDrinkPage(DrinkService drinkService, VoiceState voiceState,
         IChatClient? chatClient = null, ISpeechService? speechService = null)
@@ -25,6 +38,11 @@ public partial class LogDrinkPage : ContentPage
         _drinkService = drinkService;
         _voiceState = voiceState;
         _speechService = speechService;
+
+        if (chatClient is not null)
+        {
+            _aiClient = new ChatClientBuilder(chatClient).Build();
+        }
 
         SugarPicker.SelectedIndex = 0;
         BittersPicker.SelectedIndex = 0;
@@ -44,30 +62,6 @@ public partial class LogDrinkPage : ContentPage
         ChatEntry.Completed += OnChatSendClicked;
         ChatSendButton.Clicked += OnChatSendClicked;
         MicButton.Clicked += OnMicClicked;
-
-        if (chatClient is not null)
-        {
-            _formClient = new ChatClientBuilder(chatClient)
-                .UseFunctionInvocation()
-                .Build();
-
-            _chatHistory.Add(new ChatMessage(ChatRole.System, """
-                You are a bartender helping log an Old Fashioned and answering questions.
-                IMPORTANT: If user asks a question (what, why, how, which, recommend, suggest, best, good),
-                ANSWER the question FIRST with helpful advice, THEN ask the next form field.
-                When logging: ask ONE field at a time, call FillDrinkForm after each answer.
-                Order: bourbon → sweetener → bitters → garnish → ice → rating → notes.
-                After ALL fields, call SaveCurrentDrink. "skip" keeps default.
-                """));
-
-            _chatOptions = new ChatOptions
-            {
-                Tools = [
-                    AIFunctionFactory.Create(FillDrinkForm),
-                    AIFunctionFactory.Create(SaveCurrentDrink),
-                ]
-            };
-        }
     }
 
     protected override void OnAppearing()
@@ -81,19 +75,9 @@ public partial class LogDrinkPage : ContentPage
             MicButton.BackgroundColor = Color.FromArgb("#C0392B");
         }
 
-        // Kick off the conversational workflow, then start voice loop
-        if (_formClient is not null && _chatHistory.Count == 1)
+        if (_currentField == FormField.Bourbon)
         {
-            _ = Task.Run(async () =>
-            {
-                await SendToAiAsync("I want to log a new Old Fashioned.");
-                if (_voiceState.IsActive && _isVisible)
-                    MainThread.BeginInvokeOnMainThread(() => StartVoiceLoop());
-            });
-        }
-        else if (_voiceState.IsActive && _speechService is not null)
-        {
-            StartVoiceLoop();
+            _ = AskCurrentFieldAsync();
         }
     }
 
@@ -179,8 +163,7 @@ public partial class LogDrinkPage : ContentPage
                     {
                         _speechService.StopSpeaking();
                         ChatEntry.Text = string.Empty;
-                        // Await so we don't listen again until AI responds and TTS finishes
-                        await SendToAiAsync(text);
+                        await HandleUserInputAsync(text);
                     }
                 }
 
@@ -206,7 +189,7 @@ public partial class LogDrinkPage : ContentPage
 
     #endregion
 
-    #region AI Chat
+    #region State Machine
 
     private async void OnChatSendClicked(object? sender, EventArgs e)
     {
@@ -215,78 +198,43 @@ public partial class LogDrinkPage : ContentPage
             return;
 
         ChatEntry.Text = string.Empty;
-        await SendToAiAsync(message);
+        await HandleUserInputAsync(message);
     }
 
-    private async Task SendToAiAsync(string message)
+    private async Task HandleUserInputAsync(string message)
     {
-        if (_formClient is null)
+        if (_isSending) return;
+
+        if (DetectNavigation(message)) return;
+
+        // Question — ask AI for advice, don't advance the form
+        if (IsQuestion(message))
         {
-            ShowAiResponse("⚠️ AI not available on this device.");
+            await AskAiQuestionAsync(message);
             return;
         }
 
-        // Handle navigation commands client-side
-        if (DetectNavigation(message))
-            return;
-
-        if (_isSending) return;
+        // Form field answer
         _isSending = true;
-        ShowAiResponse("🤔 Thinking...");
-
         try
         {
-            bool isQuestion = IsQuestion(message);
-            _chatHistory.Add(new ChatMessage(ChatRole.User, message));
-            Console.WriteLine($"[LogForm] Sending ({(isQuestion ? "question" : "form")}): {message}");
+            ApplyFieldValue(message);
+            _currentField = NextField(_currentField);
 
-            // Trim history to avoid context overflow
-            TrimHistory(maxUserMessages: 6);
-
-            // For questions: send WITHOUT tools so AI answers instead of calling FillDrinkForm
-            ChatOptions? options = isQuestion ? new ChatOptions() : _chatOptions;
-
-            var response = await _formClient.GetResponseAsync(_chatHistory, options);
-            _chatHistory.AddMessages(response);
-
-            // Extract only the text content, filtering out null from tool-call messages
-            var text = string.Join("", response.Messages
-                .Where(m => m.Role == ChatRole.Assistant)
-                .SelectMany(m => m.Contents)
-                .OfType<TextContent>()
-                .Select(tc => tc.Text)
-                .Where(t => t is not null));
-
-            // Detect tool-call-as-text (AI writes "FillDrinkForm(...)" instead of calling it)
-            var toolCallResult = TryParseToolCallAsText(text);
-            if (toolCallResult is not null)
-                text = toolCallResult;
-
-            if (string.IsNullOrWhiteSpace(text))
-                text = "✅ Got it! What's next?";
-
-            Console.WriteLine($"[LogForm] Response: {text}");
-            ShowAiResponse(text);
-
-            // Speak the response if voice mode is on
-            if (_voiceState.IsActive && _speechService is not null)
+            if (_currentField == FormField.Done)
             {
-                try { await _speechService.SpeakAsync(text); }
-                catch { /* cancelled */ }
-            }
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"[LogForm] Error: {ex.Message}");
-            if (ex.Message.Contains("context window", StringComparison.OrdinalIgnoreCase))
-            {
-                // Context overflow — aggressively trim and retry
-                TrimHistory(maxUserMessages: 2);
-                ShowAiResponse("Let me try that again... What would you like to do?");
+                SaveDrink();
+                ShowAiResponse("🥃 Drink saved! Say 'go back' or log another.");
+                if (_voiceState.IsActive && _speechService is not null)
+                {
+                    try { await _speechService.SpeakAsync("Drink saved! Say go back to return, or we can log another."); }
+                    catch { }
+                }
+                _currentField = FormField.Bourbon;
             }
             else
             {
-                ShowAiResponse($"⚠️ {ex.Message}");
+                await AskCurrentFieldAsync();
             }
         }
         finally
@@ -295,98 +243,183 @@ public partial class LogDrinkPage : ContentPage
         }
     }
 
-    /// <summary>
-    /// If the AI outputs tool call as text instead of structured call, parse and execute it.
-    /// Returns the display text, or null if no tool-call-as-text was detected.
-    /// </summary>
-    private string? TryParseToolCallAsText(string text)
+    private async Task AskCurrentFieldAsync()
     {
-        if (string.IsNullOrWhiteSpace(text)) return null;
+        if (!FieldQuestions.TryGetValue(_currentField, out var question)) return;
 
-        // Detect patterns like "FillDrinkForm(bourbon: "Jack Daniels")" or "FillDrinkForm(bourbon: "X", ...)"
-        if (text.Contains("FillDrinkForm", StringComparison.OrdinalIgnoreCase))
+        ShowAiResponse(question);
+
+        if (_voiceState.IsActive && _speechService is not null)
         {
-            Console.WriteLine($"[LogForm] Detected tool-call-as-text, parsing: {text}");
-
-            var args = ParseToolArgs(text);
-            string bourbon = args.GetValueOrDefault("bourbon", "Buffalo Trace");
-            double bourbonOz = double.TryParse(args.GetValueOrDefault("bourbonOz", ""), out var bOz) ? bOz : 2.0;
-            string sugarType = args.GetValueOrDefault("sugarType", args.GetValueOrDefault("sweetener", "Simple Syrup"));
-            double sugarAmount = double.TryParse(args.GetValueOrDefault("sugarAmount", ""), out var sAmt) ? sAmt : 0.25;
-            string bittersType = args.GetValueOrDefault("bittersType", args.GetValueOrDefault("bitters", "Angostura"));
-            int bittersDashes = int.TryParse(args.GetValueOrDefault("bittersDashes", args.GetValueOrDefault("dashes", "")), out var bd) ? bd : 2;
-            string garnish = args.GetValueOrDefault("garnish", "Orange Peel");
-            string iceType = args.GetValueOrDefault("iceType", args.GetValueOrDefault("ice", "Large Cube"));
-            int stirTime = int.TryParse(args.GetValueOrDefault("stirTimeSeconds", args.GetValueOrDefault("stir", "")), out var st) ? st : 30;
-            int rating = int.TryParse(args.GetValueOrDefault("rating", ""), out var r) ? r : 3;
-            string notes = args.GetValueOrDefault("tastingNotes", args.GetValueOrDefault("notes", ""));
-
-            FillDrinkForm(bourbon, bourbonOz, sugarType, sugarAmount, bittersType, bittersDashes, garnish, iceType, stirTime, rating, notes);
-
-            return $"Got it — {bourbon}! What sweetener do you prefer?";
+            try { await _speechService.SpeakAsync(question); }
+            catch { }
+            // Start voice loop after TTS if not already running
+            if (_isVisible && (_listenCts is null || _listenCts.IsCancellationRequested))
+                StartVoiceLoop();
         }
-
-        if (text.Contains("SaveCurrentDrink", StringComparison.OrdinalIgnoreCase))
-        {
-            Console.WriteLine("[LogForm] Detected SaveCurrentDrink as text, executing.");
-            SaveCurrentDrink();
-            return "🥃 Drink saved! Want to log another?";
-        }
-
-        return null;
     }
 
-    private static Dictionary<string, string> ParseToolArgs(string text)
+    private void ApplyFieldValue(string input)
     {
-        var args = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        var value = input.Trim();
+        bool skip = value.Equals("skip", StringComparison.OrdinalIgnoreCase) ||
+                    value.Equals("default", StringComparison.OrdinalIgnoreCase);
 
-        // Match patterns like key: "value" or key: value
-        var matches = System.Text.RegularExpressions.Regex.Matches(
-            text, @"(\w+)\s*:\s*""([^""]*)""|(\w+)\s*:\s*(\S+)");
-
-        foreach (System.Text.RegularExpressions.Match m in matches)
+        MainThread.BeginInvokeOnMainThread(() =>
         {
-            if (m.Groups[1].Success)
-                args[m.Groups[1].Value] = m.Groups[2].Value;
-            else if (m.Groups[3].Success)
-                args[m.Groups[3].Value] = m.Groups[4].Value.TrimEnd(',', ')');
+            switch (_currentField)
+            {
+                case FormField.Bourbon:
+                    if (!skip) BourbonEntry.Text = value;
+                    break;
+                case FormField.Sweetener:
+                    if (!skip) SelectPickerItem(SugarPicker, value);
+                    break;
+                case FormField.Bitters:
+                    if (!skip) SelectPickerItem(BittersPicker, value);
+                    break;
+                case FormField.Garnish:
+                    if (!skip) SelectPickerItem(GarnishPicker, value);
+                    break;
+                case FormField.Ice:
+                    if (!skip) SelectPickerItem(IcePicker, value);
+                    break;
+                case FormField.Rating:
+                    if (!skip && int.TryParse(value.Replace("⭐", "").Trim(), out int r))
+                    {
+                        RatingSlider.Value = Math.Clamp(r, 1, 5);
+                        RatingLabel.Text = new string('⭐', Math.Clamp(r, 1, 5));
+                    }
+                    break;
+                case FormField.Notes:
+                    if (!skip) NotesEditor.Text = value;
+                    break;
+            }
+        });
+
+        Console.WriteLine($"[LogForm] Set {_currentField} = {(skip ? "(default)" : value)}");
+    }
+
+    private static FormField NextField(FormField current) => current switch
+    {
+        FormField.Bourbon => FormField.Sweetener,
+        FormField.Sweetener => FormField.Bitters,
+        FormField.Bitters => FormField.Garnish,
+        FormField.Garnish => FormField.Ice,
+        FormField.Ice => FormField.Rating,
+        FormField.Rating => FormField.Notes,
+        FormField.Notes => FormField.Done,
+        _ => FormField.Done,
+    };
+
+    private void SaveDrink()
+    {
+        MainThread.BeginInvokeOnMainThread(() =>
+        {
+            var drink = new DrinkRecipe
+            {
+                Bourbon = BourbonEntry.Text?.Trim() ?? "Buffalo Trace",
+                BourbonOz = BourbonOzStepper.Value,
+                SugarType = SugarPicker.SelectedItem?.ToString() ?? "Simple Syrup",
+                SugarAmount = SugarStepper.Value,
+                BittersType = BittersPicker.SelectedItem?.ToString() ?? "Angostura",
+                BittersDashes = (int)BittersStepper.Value,
+                Garnish = GarnishPicker.SelectedItem?.ToString() ?? "Orange Peel",
+                IceType = IcePicker.SelectedItem?.ToString() ?? "Large Cube",
+                StirTimeSeconds = (int)StirStepper.Value,
+                Rating = (int)Math.Round(RatingSlider.Value),
+                TastingNotes = NotesEditor.Text?.Trim() ?? string.Empty,
+            };
+
+            _drinkService.Save(drink);
+            Console.WriteLine($"[LogForm] Saved: {drink.RecipeSummary}");
+
+            BourbonEntry.Text = string.Empty;
+            NotesEditor.Text = string.Empty;
+            RatingSlider.Value = 3;
+            RatingLabel.Text = "⭐⭐⭐";
+        });
+    }
+
+    #endregion
+
+    #region AI Questions
+
+    private async Task AskAiQuestionAsync(string question)
+    {
+        if (_aiClient is null)
+        {
+            ShowAiResponse("⚠️ AI not available — but I can still log your drink!");
+            return;
         }
 
-        return args;
+        _isSending = true;
+        ShowAiResponse("🤔 Thinking...");
+
+        try
+        {
+            var messages = new List<ChatMessage>
+            {
+                new(ChatRole.System, "You are an expert bartender. Answer concisely about bourbon, cocktails, techniques, ingredients. 2-3 sentences max."),
+                new(ChatRole.User, question)
+            };
+
+            var response = await _aiClient.GetResponseAsync(messages);
+
+            var text = string.Join("", response.Messages
+                .Where(m => m.Role == ChatRole.Assistant)
+                .SelectMany(m => m.Contents)
+                .OfType<TextContent>()
+                .Select(tc => tc.Text)
+                .Where(t => t is not null));
+
+            if (string.IsNullOrWhiteSpace(text))
+                text = "Hmm, I'm not sure about that. Let's keep going!";
+
+            if (FieldQuestions.TryGetValue(_currentField, out var fieldQ))
+                text = $"{text}\n\n{fieldQ}";
+
+            ShowAiResponse(text);
+
+            if (_voiceState.IsActive && _speechService is not null)
+            {
+                try { await _speechService.SpeakAsync(text); }
+                catch { }
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[LogForm] AI error: {ex.Message}");
+            var fallback = FieldQuestions.GetValueOrDefault(_currentField, "");
+            ShowAiResponse($"Sorry, couldn't get an answer. {fallback}");
+        }
+        finally
+        {
+            _isSending = false;
+        }
     }
 
-    /// <summary>Keep conversation short to avoid Apple Intelligence context overflow.</summary>
-    private void TrimHistory(int maxUserMessages)
-    {
-        // Count user messages (skip system prompt at index 0)
-        int userCount = _chatHistory.Count(m => m.Role == ChatRole.User);
-        if (userCount <= maxUserMessages) return;
+    #endregion
 
-        // Keep system prompt + last N exchanges
-        var system = _chatHistory.First(m => m.Role == ChatRole.System);
-        var recent = _chatHistory.Skip(1).TakeLast(maxUserMessages * 2).ToList();
-        _chatHistory.Clear();
-        _chatHistory.Add(system);
-        _chatHistory.AddRange(recent);
-        Console.WriteLine($"[LogForm] Trimmed history to {_chatHistory.Count} messages");
-    }
+    #region Helpers
 
     private static bool IsQuestion(string text)
     {
         var lower = text.TrimStart().ToLowerInvariant();
-        string[] questionWords = ["what", "why", "how", "which", "recommend", "suggest", "best", "good", "should", "would", "could", "tell me", "difference", "compare"];
+        string[] questionWords = ["what", "why", "how", "which", "recommend", "suggest",
+            "best", "good", "should", "would", "could", "tell me", "difference", "compare"];
         return lower.Contains('?') || questionWords.Any(q => lower.StartsWith(q) || lower.Contains($" {q} "));
     }
 
     private bool DetectNavigation(string message)
     {
         var lower = message.ToLowerInvariant();
-        string[] backPhrases = ["go back", "go home", "back to chat", "main page", "return", "never mind", "nevermind", "cancel"];
+        string[] backPhrases = ["go back", "go home", "back to chat", "main page",
+            "return", "never mind", "nevermind", "cancel"];
         if (backPhrases.Any(p => lower.Contains(p)))
         {
             MainThread.BeginInvokeOnMainThread(async () =>
             {
-                _voiceState.SetActive(false);
                 _listenCts?.Cancel();
                 _speechService?.StopListening();
                 _speechService?.StopSpeaking();
@@ -406,99 +439,13 @@ public partial class LogDrinkPage : ContentPage
         });
     }
 
-    #endregion
-
-    #region Form Tool
-
-    [Description("Fill the drink form. Call after each user answer.")]
-    private string FillDrinkForm(
-        [Description("Bourbon name")] string bourbon = "Buffalo Trace",
-        [Description("Oz (1-4)")] double bourbonOz = 2.0,
-        [Description("Sugar type")] string sugarType = "Simple Syrup",
-        [Description("Sugar oz (0-1)")] double sugarAmount = 0.25,
-        [Description("Bitters type")] string bittersType = "Angostura",
-        [Description("Dashes (1-6)")] int bittersDashes = 2,
-        [Description("Garnish")] string garnish = "Orange Peel",
-        [Description("Ice type")] string iceType = "Large Cube",
-        [Description("Stir seconds")] int stirTimeSeconds = 30,
-        [Description("Rating 1-5")] int rating = 3,
-        [Description("Notes")] string tastingNotes = "")
-    {
-        MainThread.BeginInvokeOnMainThread(() =>
-        {
-            BourbonEntry.Text = bourbon;
-            BourbonOzStepper.Value = Math.Clamp(bourbonOz, 1, 4);
-            BourbonOzLabel.Text = $"{BourbonOzStepper.Value} oz";
-
-            SelectPickerItem(SugarPicker, sugarType);
-            SugarStepper.Value = Math.Clamp(sugarAmount, 0, 1);
-            SugarLabel.Text = $"{SugarStepper.Value} oz";
-
-            SelectPickerItem(BittersPicker, bittersType);
-            BittersStepper.Value = Math.Clamp(bittersDashes, 1, 6);
-            BittersLabel.Text = $"{(int)BittersStepper.Value} dashes";
-
-            SelectPickerItem(GarnishPicker, garnish);
-            SelectPickerItem(IcePicker, iceType);
-
-            StirStepper.Value = Math.Clamp(stirTimeSeconds, 10, 90);
-            StirLabel.Text = $"{(int)StirStepper.Value} seconds";
-
-            RatingSlider.Value = Math.Clamp(rating, 1, 5);
-            RatingLabel.Text = new string('⭐', Math.Clamp(rating, 1, 5));
-
-            if (!string.IsNullOrWhiteSpace(tastingNotes))
-                NotesEditor.Text = tastingNotes;
-        });
-
-        return $"Form updated: {bourbonOz}oz {bourbon}, {sugarAmount} {sugarType}, {bittersDashes} dashes {bittersType}, {garnish}, {iceType}, stirred {stirTimeSeconds}s, {rating}/5.";
-    }
-
-    [Description("Save the current drink. Call after all fields are filled.")]
-    private string SaveCurrentDrink()
-    {
-        string summary = "";
-        ManualResetEventSlim done = new();
-
-        MainThread.BeginInvokeOnMainThread(() =>
-        {
-            var drink = new DrinkRecipe
-            {
-                Bourbon = BourbonEntry.Text?.Trim() ?? "Buffalo Trace",
-                BourbonOz = BourbonOzStepper.Value,
-                SugarType = SugarPicker.SelectedItem?.ToString() ?? "Simple Syrup",
-                SugarAmount = SugarStepper.Value,
-                BittersType = BittersPicker.SelectedItem?.ToString() ?? "Angostura",
-                BittersDashes = (int)BittersStepper.Value,
-                Garnish = GarnishPicker.SelectedItem?.ToString() ?? "Orange Peel",
-                IceType = IcePicker.SelectedItem?.ToString() ?? "Large Cube",
-                StirTimeSeconds = (int)StirStepper.Value,
-                Rating = (int)Math.Round(RatingSlider.Value),
-                TastingNotes = NotesEditor.Text?.Trim() ?? string.Empty,
-            };
-
-            _drinkService.Save(drink);
-            summary = $"Saved! {drink.RecipeSummary} ({drink.Rating}/5 ⭐)";
-
-            BourbonEntry.Text = string.Empty;
-            NotesEditor.Text = string.Empty;
-            RatingSlider.Value = 3;
-            RatingLabel.Text = "⭐⭐⭐";
-
-            done.Set();
-        });
-
-        done.Wait(TimeSpan.FromSeconds(5));
-        return summary.Length > 0 ? summary : "Drink saved!";
-    }
-
     private static void SelectPickerItem(Picker picker, string value)
     {
         if (picker.ItemsSource is IList<string> items)
         {
             for (int i = 0; i < items.Count; i++)
             {
-                if (items[i].Equals(value, StringComparison.OrdinalIgnoreCase))
+                if (items[i].Contains(value, StringComparison.OrdinalIgnoreCase))
                 {
                     picker.SelectedIndex = i;
                     return;
@@ -517,27 +464,7 @@ public partial class LogDrinkPage : ContentPage
             return;
         }
 
-        var drink = new DrinkRecipe
-        {
-            Bourbon = BourbonEntry.Text.Trim(),
-            BourbonOz = BourbonOzStepper.Value,
-            SugarType = SugarPicker.SelectedItem?.ToString() ?? "Simple Syrup",
-            SugarAmount = SugarStepper.Value,
-            BittersType = BittersPicker.SelectedItem?.ToString() ?? "Angostura",
-            BittersDashes = (int)BittersStepper.Value,
-            Garnish = GarnishPicker.SelectedItem?.ToString() ?? "Orange Peel",
-            IceType = IcePicker.SelectedItem?.ToString() ?? "Large Cube",
-            StirTimeSeconds = (int)StirStepper.Value,
-            Rating = (int)Math.Round(RatingSlider.Value),
-            TastingNotes = NotesEditor.Text?.Trim() ?? string.Empty,
-        };
-
-        _drinkService.Save(drink);
-
-        await DisplayAlertAsync("Saved! 🥃", $"Logged your {drink.Bourbon} Old Fashioned.", "OK");
-
-        BourbonEntry.Text = string.Empty;
-        NotesEditor.Text = string.Empty;
-        RatingSlider.Value = 3;
+        SaveDrink();
+        await DisplayAlertAsync("Saved! 🥃", "Logged your Old Fashioned.", "OK");
     }
 }
