@@ -14,6 +14,7 @@ public partial class LogDrinkPage : ContentPage
     private readonly List<ChatMessage> _chatHistory = [];
     private readonly ChatOptions? _chatOptions;
     private bool _isSending;
+    private bool _isVisible;
     private CancellationTokenSource? _listenCts;
     private CancellationTokenSource? _silenceCts;
 
@@ -51,11 +52,11 @@ public partial class LogDrinkPage : ContentPage
                 .Build();
 
             _chatHistory.Add(new ChatMessage(ChatRole.System, """
-                You help log drinks. Ask ONE field at a time, call FillDrinkForm after each answer.
+                You help log Old Fashioned cocktails AND answer questions about bourbon, cocktails, techniques.
+                When logging: ask ONE field at a time, call FillDrinkForm after each answer.
                 Order: bourbon → sweetener → bitters → garnish → ice → rating → notes.
-                After ALL fields are filled, call SaveCurrentDrink to save it automatically.
-                If user gives multiple details at once, fill them all and skip ahead.
-                "skip" keeps the default. Be very concise — one short question per turn.
+                After ALL fields, call SaveCurrentDrink. If user gives multiple details, fill all and skip ahead.
+                "skip" keeps default. Be concise. Also answer any questions the user asks.
                 """));
 
             _chatOptions = new ChatOptions
@@ -71,23 +72,34 @@ public partial class LogDrinkPage : ContentPage
     protected override void OnAppearing()
     {
         base.OnAppearing();
+        _isVisible = true;
 
-        // Resume voice mode if globally active
         if (_voiceState.IsActive && _speechService is not null)
         {
             MicButton.Text = "⏹️";
             MicButton.BackgroundColor = Color.FromArgb("#C0392B");
-            StartVoiceLoop();
         }
 
-        // Kick off the conversational workflow
+        // Kick off the conversational workflow, then start voice loop
         if (_formClient is not null && _chatHistory.Count == 1)
-            _ = SendToAiAsync("I want to log a new Old Fashioned.");
+        {
+            _ = Task.Run(async () =>
+            {
+                await SendToAiAsync("I want to log a new Old Fashioned.");
+                if (_voiceState.IsActive && _isVisible)
+                    MainThread.BeginInvokeOnMainThread(() => StartVoiceLoop());
+            });
+        }
+        else if (_voiceState.IsActive && _speechService is not null)
+        {
+            StartVoiceLoop();
+        }
     }
 
     protected override void OnDisappearing()
     {
         base.OnDisappearing();
+        _isVisible = false;
         _listenCts?.Cancel();
         _silenceCts?.Cancel();
         _speechService?.StopListening();
@@ -124,7 +136,7 @@ public partial class LogDrinkPage : ContentPage
     {
         if (_speechService is null) return;
 
-        while (_voiceState.IsActive)
+        while (_voiceState.IsActive && _isVisible)
         {
             ChatEntry.Text = string.Empty;
             ChatEntry.Placeholder = "Listening...";
@@ -154,7 +166,7 @@ public partial class LogDrinkPage : ContentPage
                     cancellationToken: _listenCts.Token);
 
                 _silenceCts?.Cancel();
-                if (!_voiceState.IsActive) break;
+                if (!_voiceState.IsActive || !_isVisible) break;
 
                 if (!string.IsNullOrWhiteSpace(result))
                 {
@@ -166,7 +178,8 @@ public partial class LogDrinkPage : ContentPage
                     {
                         _speechService.StopSpeaking();
                         ChatEntry.Text = string.Empty;
-                        _ = SendToAiAsync(text);
+                        // Await so we don't listen again until AI responds and TTS finishes
+                        await SendToAiAsync(text);
                     }
                 }
 
@@ -221,6 +234,9 @@ public partial class LogDrinkPage : ContentPage
             _chatHistory.Add(new ChatMessage(ChatRole.User, message));
             Console.WriteLine($"[LogForm] Sending: {message}");
 
+            // Trim history to avoid context overflow — keep system + last 6 exchanges
+            TrimHistory(maxUserMessages: 6);
+
             var response = await _formClient.GetResponseAsync(_chatHistory, _chatOptions);
             _chatHistory.AddMessages(response);
 
@@ -232,8 +248,15 @@ public partial class LogDrinkPage : ContentPage
                 .Select(tc => tc.Text)
                 .Where(t => t is not null));
 
+            // Detect tool-call-as-text (AI writes "FillDrinkForm(...)" instead of calling it)
+            var toolCallResult = TryParseToolCallAsText(text);
+            if (toolCallResult is not null)
+            {
+                text = toolCallResult;
+            }
+
             if (string.IsNullOrWhiteSpace(text))
-                text = "Done! Tap 💾 Save Drink when ready.";
+                text = "✅ Got it! What's next?";
 
             Console.WriteLine($"[LogForm] Response: {text}");
             ShowAiResponse(text);
@@ -248,12 +271,97 @@ public partial class LogDrinkPage : ContentPage
         catch (Exception ex)
         {
             Console.WriteLine($"[LogForm] Error: {ex.Message}");
-            ShowAiResponse($"⚠️ {ex.Message}");
+            if (ex.Message.Contains("context window", StringComparison.OrdinalIgnoreCase))
+            {
+                // Context overflow — aggressively trim and retry
+                TrimHistory(maxUserMessages: 2);
+                ShowAiResponse("Let me try that again... What would you like to do?");
+            }
+            else
+            {
+                ShowAiResponse($"⚠️ {ex.Message}");
+            }
         }
         finally
         {
             _isSending = false;
         }
+    }
+
+    /// <summary>
+    /// If the AI outputs tool call as text instead of structured call, parse and execute it.
+    /// Returns the display text, or null if no tool-call-as-text was detected.
+    /// </summary>
+    private string? TryParseToolCallAsText(string text)
+    {
+        if (string.IsNullOrWhiteSpace(text)) return null;
+
+        // Detect patterns like "FillDrinkForm(bourbon: "Jack Daniels")" or "FillDrinkForm(bourbon: "X", ...)"
+        if (text.Contains("FillDrinkForm", StringComparison.OrdinalIgnoreCase))
+        {
+            Console.WriteLine($"[LogForm] Detected tool-call-as-text, parsing: {text}");
+
+            var args = ParseToolArgs(text);
+            string bourbon = args.GetValueOrDefault("bourbon", "Buffalo Trace");
+            double bourbonOz = double.TryParse(args.GetValueOrDefault("bourbonOz", ""), out var bOz) ? bOz : 2.0;
+            string sugarType = args.GetValueOrDefault("sugarType", args.GetValueOrDefault("sweetener", "Simple Syrup"));
+            double sugarAmount = double.TryParse(args.GetValueOrDefault("sugarAmount", ""), out var sAmt) ? sAmt : 0.25;
+            string bittersType = args.GetValueOrDefault("bittersType", args.GetValueOrDefault("bitters", "Angostura"));
+            int bittersDashes = int.TryParse(args.GetValueOrDefault("bittersDashes", args.GetValueOrDefault("dashes", "")), out var bd) ? bd : 2;
+            string garnish = args.GetValueOrDefault("garnish", "Orange Peel");
+            string iceType = args.GetValueOrDefault("iceType", args.GetValueOrDefault("ice", "Large Cube"));
+            int stirTime = int.TryParse(args.GetValueOrDefault("stirTimeSeconds", args.GetValueOrDefault("stir", "")), out var st) ? st : 30;
+            int rating = int.TryParse(args.GetValueOrDefault("rating", ""), out var r) ? r : 3;
+            string notes = args.GetValueOrDefault("tastingNotes", args.GetValueOrDefault("notes", ""));
+
+            FillDrinkForm(bourbon, bourbonOz, sugarType, sugarAmount, bittersType, bittersDashes, garnish, iceType, stirTime, rating, notes);
+
+            return $"Got it — {bourbon}! What sweetener do you prefer?";
+        }
+
+        if (text.Contains("SaveCurrentDrink", StringComparison.OrdinalIgnoreCase))
+        {
+            Console.WriteLine("[LogForm] Detected SaveCurrentDrink as text, executing.");
+            SaveCurrentDrink();
+            return "🥃 Drink saved! Want to log another?";
+        }
+
+        return null;
+    }
+
+    private static Dictionary<string, string> ParseToolArgs(string text)
+    {
+        var args = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+        // Match patterns like key: "value" or key: value
+        var matches = System.Text.RegularExpressions.Regex.Matches(
+            text, @"(\w+)\s*:\s*""([^""]*)""|(\w+)\s*:\s*(\S+)");
+
+        foreach (System.Text.RegularExpressions.Match m in matches)
+        {
+            if (m.Groups[1].Success)
+                args[m.Groups[1].Value] = m.Groups[2].Value;
+            else if (m.Groups[3].Success)
+                args[m.Groups[3].Value] = m.Groups[4].Value.TrimEnd(',', ')');
+        }
+
+        return args;
+    }
+
+    /// <summary>Keep conversation short to avoid Apple Intelligence context overflow.</summary>
+    private void TrimHistory(int maxUserMessages)
+    {
+        // Count user messages (skip system prompt at index 0)
+        int userCount = _chatHistory.Count(m => m.Role == ChatRole.User);
+        if (userCount <= maxUserMessages) return;
+
+        // Keep system prompt + last N exchanges
+        var system = _chatHistory.First(m => m.Role == ChatRole.System);
+        var recent = _chatHistory.Skip(1).TakeLast(maxUserMessages * 2).ToList();
+        _chatHistory.Clear();
+        _chatHistory.Add(system);
+        _chatHistory.AddRange(recent);
+        Console.WriteLine($"[LogForm] Trimmed history to {_chatHistory.Count} messages");
     }
 
     private void ShowAiResponse(string text)

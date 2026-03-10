@@ -10,6 +10,7 @@ public partial class ChatPage : ContentPage
     private readonly ISpeechService? _speechService;
     private readonly VoiceState _voiceState;
     private bool _isSending;
+    private bool _isVisible;
     private CancellationTokenSource? _listenCts;
     private CancellationTokenSource? _silenceCts;
     private CancellationTokenSource? _aiCts;
@@ -70,6 +71,7 @@ public partial class ChatPage : ContentPage
     protected override async void OnAppearing()
     {
         base.OnAppearing();
+        _isVisible = true;
 
         if (MessageStack.Children.Count == 0)
         {
@@ -95,7 +97,7 @@ public partial class ChatPage : ContentPage
     protected override void OnDisappearing()
     {
         base.OnDisappearing();
-        // Stop the listen loop but keep voice state active
+        _isVisible = false;
         _listenCts?.Cancel();
         _silenceCts?.Cancel();
         _speechService?.StopListening();
@@ -133,7 +135,7 @@ public partial class ChatPage : ContentPage
     {
         if (_speechService is null) return;
 
-        while (_voiceState.IsActive)
+        while (_voiceState.IsActive && _isVisible)
         {
             MessageEntry.Text = string.Empty;
             MessageEntry.Placeholder = "Listening...";
@@ -147,7 +149,7 @@ public partial class ChatPage : ContentPage
 
                 _silenceCts?.Cancel();
 
-                if (!_voiceState.IsActive) break;
+                if (!_voiceState.IsActive || !_isVisible) break;
 
                 if (!string.IsNullOrWhiteSpace(result))
                 {
