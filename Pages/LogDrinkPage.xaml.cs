@@ -226,26 +226,27 @@ public partial class LogDrinkPage : ContentPage
             return;
         }
 
+        // Handle navigation commands client-side
+        if (DetectNavigation(message))
+            return;
+
         if (_isSending) return;
         _isSending = true;
         ShowAiResponse("🤔 Thinking...");
 
         try
         {
+            bool isQuestion = IsQuestion(message);
             _chatHistory.Add(new ChatMessage(ChatRole.User, message));
-            Console.WriteLine($"[LogForm] Sending: {message}");
+            Console.WriteLine($"[LogForm] Sending ({(isQuestion ? "question" : "form")}): {message}");
 
-            // If user is asking a question, prepend a hint so AI answers instead of skipping
-            if (IsQuestion(message))
-            {
-                _chatHistory.Add(new ChatMessage(ChatRole.User, 
-                    "(Answer my question with bartender expertise before continuing the form)"));
-            }
-
-            // Trim history to avoid context overflow — keep system + last 6 exchanges
+            // Trim history to avoid context overflow
             TrimHistory(maxUserMessages: 6);
 
-            var response = await _formClient.GetResponseAsync(_chatHistory, _chatOptions);
+            // For questions: send WITHOUT tools so AI answers instead of calling FillDrinkForm
+            ChatOptions? options = isQuestion ? new ChatOptions() : _chatOptions;
+
+            var response = await _formClient.GetResponseAsync(_chatHistory, options);
             _chatHistory.AddMessages(response);
 
             // Extract only the text content, filtering out null from tool-call messages
@@ -259,9 +260,7 @@ public partial class LogDrinkPage : ContentPage
             // Detect tool-call-as-text (AI writes "FillDrinkForm(...)" instead of calling it)
             var toolCallResult = TryParseToolCallAsText(text);
             if (toolCallResult is not null)
-            {
                 text = toolCallResult;
-            }
 
             if (string.IsNullOrWhiteSpace(text))
                 text = "✅ Got it! What's next?";
@@ -377,6 +376,25 @@ public partial class LogDrinkPage : ContentPage
         var lower = text.TrimStart().ToLowerInvariant();
         string[] questionWords = ["what", "why", "how", "which", "recommend", "suggest", "best", "good", "should", "would", "could", "tell me", "difference", "compare"];
         return lower.Contains('?') || questionWords.Any(q => lower.StartsWith(q) || lower.Contains($" {q} "));
+    }
+
+    private bool DetectNavigation(string message)
+    {
+        var lower = message.ToLowerInvariant();
+        string[] backPhrases = ["go back", "go home", "back to chat", "main page", "return", "never mind", "nevermind", "cancel"];
+        if (backPhrases.Any(p => lower.Contains(p)))
+        {
+            MainThread.BeginInvokeOnMainThread(async () =>
+            {
+                _voiceState.SetActive(false);
+                _listenCts?.Cancel();
+                _speechService?.StopListening();
+                _speechService?.StopSpeaking();
+                await Shell.Current.GoToAsync("..");
+            });
+            return true;
+        }
+        return false;
     }
 
     private void ShowAiResponse(string text)
